@@ -1,0 +1,296 @@
+<span class="hl slc">;   The Computer Language Benchmarks Game</span>
+<span class="hl slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">;;</span>
+<span class="hl slc">;; ported from Scala #2</span>
+<span class="hl slc">;; contributed by Alex Miller</span>
+
+<span class="hl opt">(</span><span class="hl kwa">ns</span> knucleotide
+  <span class="hl opt">(:</span>gen-class<span class="hl opt">)</span>
+  <span class="hl opt">(:</span>require <span class="hl opt">[</span>clojure.string <span class="hl opt">:</span>as s<span class="hl opt">])</span>
+  <span class="hl opt">(:</span>import <span class="hl opt">[</span>java.util.concurrent Executors Future<span class="hl opt">]</span>
+           <span class="hl opt">[</span>java.io InputStream<span class="hl opt">]</span>
+           <span class="hl opt">[</span>clojure.lang Numbers<span class="hl opt">]</span>
+           <span class="hl opt">[</span>java.nio.channels Channels ReadableByteChannel<span class="hl opt">]</span>
+           <span class="hl opt">[</span>java.nio ByteBuffer<span class="hl opt">]))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>warn-on-reflection<span class="hl opt">*</span> true<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>unchecked-math<span class="hl opt">*</span> true<span class="hl opt">)</span>
+
+<span class="hl opt">(</span><span class="hl kwa">definterface</span> IDnaHash
+  <span class="hl opt">(</span><span class="hl kwa">add</span> <span class="hl opt">[</span>^long key ^long count<span class="hl opt">])</span>
+  <span class="hl opt">(</span>^long get <span class="hl opt">[</span>^long key<span class="hl opt">])</span>
+  <span class="hl opt">(</span>^void printSorted <span class="hl opt">[]))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">definterface</span> IBits
+  <span class="hl opt">(</span><span class="hl kwa">add2</span> <span class="hl opt">[</span>^long b<span class="hl opt">])</span>
+  <span class="hl opt">(</span><span class="hl kwa">addLots</span> <span class="hl opt">[</span>bs<span class="hl opt">])</span>
+  <span class="hl opt">(</span><span class="hl kwa">addToHash</span> <span class="hl opt">[</span>h ^long n ^long offset<span class="hl opt">])</span>
+  <span class="hl opt">(</span>^long getSize <span class="hl opt">[]))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">deftype</span> Bits <span class="hl opt">[</span>^ints data <span class="hl slc">;; array of ints, each of which has 16 2-bit slots</span>
+               ^<span class="hl opt">:</span>unsynchronized-mutable ^long size <span class="hl slc">;; number of bits in Bits</span>
+               ^<span class="hl opt">:</span>unsynchronized-mutable ^long index <span class="hl slc">;; write index in data</span>
+               ^<span class="hl opt">:</span>unsynchronized-mutable ^long n<span class="hl opt">]</span> <span class="hl slc">;; bit offset to write at current index</span>
+  IBits
+  <span class="hl opt">(</span><span class="hl kwa">add2</span> <span class="hl opt">[</span>_ b<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>data ^ints data<span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> size <span class="hl opt">(</span><span class="hl kwa">inc</span> size<span class="hl opt">))</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> n <span class="hl num">30</span><span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> index <span class="hl opt">(</span><span class="hl kwa">inc</span> index<span class="hl opt">))</span>
+        <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl num">0</span><span class="hl opt">))</span>
+      <span class="hl opt">(</span><span class="hl kwa">aset</span> data index <span class="hl opt">(</span><span class="hl kwa">bit-or</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ^ints data index<span class="hl opt">)</span>
+                               <span class="hl opt">(</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>shiftLeftInt <span class="hl opt">(</span><span class="hl kwa">bit-and</span> b <span class="hl num">0x3</span><span class="hl opt">)</span> n<span class="hl opt">)))</span>
+      <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl opt">(+</span> n <span class="hl num">2</span><span class="hl opt">))</span>
+      nil<span class="hl opt">))</span>
+  <span class="hl opt">(</span><span class="hl kwa">addLots</span> <span class="hl opt">[</span>this bs<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>data ^ints data
+          bs ^Bits bs<span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">or</span> <span class="hl opt">(=</span> n <span class="hl num">0</span><span class="hl opt">) (&gt;</span> n <span class="hl num">30</span><span class="hl opt">))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> n <span class="hl num">30</span><span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> index <span class="hl opt">(</span><span class="hl kwa">inc</span> index<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl num">0</span><span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">System</span><span class="hl opt">/</span>arraycopy ^ints <span class="hl opt">(</span>.-data bs<span class="hl opt">)</span> <span class="hl num">0</span> data index <span class="hl opt">(</span>.-index bs<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> index <span class="hl opt">(+</span> index <span class="hl opt">(</span>.-index bs<span class="hl opt">)))</span>
+          <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(</span><span class="hl kwa">and</span> <span class="hl opt">(&gt;</span> index <span class="hl num">0</span><span class="hl opt">) (=</span> n <span class="hl num">0</span><span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> index <span class="hl opt">(</span><span class="hl kwa">dec</span> index<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl num">32</span><span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+            <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i <span class="hl opt">(</span>.-index bs<span class="hl opt">))</span>
+              <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>j <span class="hl opt">(</span><span class="hl kwa">aget</span> ^ints <span class="hl opt">(</span>.-data bs<span class="hl opt">)</span> i<span class="hl opt">)]</span>
+                <span class="hl opt">(</span><span class="hl kwa">aset</span> data index <span class="hl opt">(</span><span class="hl kwa">bit-or</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> data index<span class="hl opt">) (</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>shiftLeftInt j n<span class="hl opt">)))</span>
+                <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> index <span class="hl opt">(</span><span class="hl kwa">inc</span> index<span class="hl opt">))</span>
+                <span class="hl opt">(</span><span class="hl kwa">aset</span> data index <span class="hl opt">(</span><span class="hl kwa">bit-or</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> data index<span class="hl opt">) (</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>unsignedShiftRightInt j <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl num">32</span> n<span class="hl opt">))))</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))))))</span>
+      <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> size <span class="hl opt">(+</span> size <span class="hl opt">(*</span> <span class="hl num">16</span> ^long <span class="hl opt">(</span>.-index bs<span class="hl opt">))))</span>
+      <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>bsn <span class="hl opt">(</span>.-n bs<span class="hl opt">)]</span>
+        <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> bsn <span class="hl num">0</span><span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>n bsn
+                 i <span class="hl opt">(</span><span class="hl kwa">aget</span> ^ints <span class="hl opt">(</span>.-data bs<span class="hl opt">) (</span>.-index bs<span class="hl opt">))]</span>
+            <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> n <span class="hl num">0</span><span class="hl opt">)</span>
+              <span class="hl opt">(</span>.add2 this i<span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">-</span> n <span class="hl num">2</span><span class="hl opt">))</span>
+                     <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>unsignedShiftRightInt i <span class="hl num">2</span><span class="hl opt">)))))))</span>
+      nil<span class="hl opt">))</span>
+  <span class="hl opt">(</span><span class="hl kwa">addToHash</span> <span class="hl opt">[</span>_ h n offset<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>data ^ints data
+          mask <span class="hl opt">(</span><span class="hl kwa">dec</span> <span class="hl opt">(</span><span class="hl kwa">bit-shift-left</span> <span class="hl num">1</span> <span class="hl opt">(*</span> n <span class="hl num">2</span><span class="hl opt">)))]</span>
+      <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl opt">(</span><span class="hl kwa">rem</span> offset <span class="hl num">16</span><span class="hl opt">)</span>
+             j <span class="hl opt">(</span><span class="hl kwa">quot</span> offset <span class="hl num">16</span><span class="hl opt">)</span>
+             h ^IDnaHash h<span class="hl opt">]</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;= (+ (*</span> j <span class="hl num">16</span><span class="hl opt">)</span> i n<span class="hl opt">)</span> size<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;= (+</span> i n<span class="hl opt">)</span> <span class="hl num">16</span><span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>l <span class="hl opt">(</span><span class="hl kwa">bit-and</span> <span class="hl opt">(</span><span class="hl kwa">unsigned-bit-shift-right</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> data j<span class="hl opt">) (*</span> <span class="hl num">2</span> i<span class="hl opt">))</span> mask<span class="hl opt">)</span>
+                  newi <span class="hl opt">(+</span> i n<span class="hl opt">)]</span>
+              <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt;=</span> newi <span class="hl num">16</span><span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">-</span> newi <span class="hl num">16</span><span class="hl opt">) (</span><span class="hl kwa">inc</span> j<span class="hl opt">) (</span>.add h l <span class="hl num">1</span><span class="hl opt">))</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> newi j <span class="hl opt">(</span>.add h l <span class="hl num">1</span><span class="hl opt">))))</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>l <span class="hl opt">(</span><span class="hl kwa">bit-and</span> <span class="hl opt">(</span><span class="hl kwa">bit-or</span> <span class="hl opt">(</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>unsignedShiftRightInt <span class="hl opt">(</span><span class="hl kwa">aget</span> data j<span class="hl opt">) (</span><span class="hl kwa">int</span> <span class="hl opt">(*</span> <span class="hl num">2</span> i<span class="hl opt">)))</span>
+                                     <span class="hl opt">(</span><span class="hl kwa">bit-shift-left</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> data <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">)) (*</span> <span class="hl num">2</span> <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl num">16</span> i<span class="hl opt">))))</span>
+                             mask<span class="hl opt">)</span>
+                  newj <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">)</span>
+                  newi <span class="hl opt">(+</span> i <span class="hl opt">(</span><span class="hl kwa">-</span> n <span class="hl num">16</span><span class="hl opt">))]</span>
+              <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt;=</span> newi <span class="hl num">16</span><span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">-</span> newi <span class="hl num">16</span><span class="hl opt">) (</span><span class="hl kwa">inc</span> newj<span class="hl opt">) (</span>.add h l <span class="hl num">1</span><span class="hl opt">))</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> newi newj <span class="hl opt">(</span>.add h l <span class="hl num">1</span><span class="hl opt">)))))</span>
+          h<span class="hl opt">))))</span>
+  <span class="hl opt">(</span><span class="hl kwa">getSize</span> <span class="hl opt">[</span>_<span class="hl opt">]</span> size<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">def</span> table <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>arr <span class="hl opt">(</span><span class="hl kwa">long-array</span> <span class="hl num">256</span><span class="hl opt">)]</span>
+             <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+               <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i <span class="hl num">256</span><span class="hl opt">)</span>
+                 <span class="hl opt">(</span><span class="hl kwa">do</span>
+                   <span class="hl opt">(</span><span class="hl kwa">aset</span> arr i <span class="hl opt">(</span><span class="hl kwa">case</span> i
+                                 <span class="hl opt">(</span><span class="hl kwa">97</span> <span class="hl num">65</span><span class="hl opt">)</span> <span class="hl num">0</span>
+                                 <span class="hl opt">(</span><span class="hl kwa">116</span> <span class="hl num">84</span><span class="hl opt">)</span> <span class="hl num">1</span>
+                                 <span class="hl opt">(</span><span class="hl kwa">103</span> <span class="hl num">71</span><span class="hl opt">)</span> <span class="hl num">2</span>
+                                 <span class="hl opt">(</span><span class="hl kwa">99</span> <span class="hl num">67</span><span class="hl opt">)</span> <span class="hl num">3</span>
+                                 -<span class="hl num">1</span><span class="hl opt">))</span>
+                   <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))</span>
+                 arr<span class="hl opt">))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> r ^long <span class="hl opt">[</span>^ReadableByteChannel ch ^ByteBuffer d<span class="hl opt">]</span>
+  <span class="hl opt">(</span>.clear d<span class="hl opt">)</span>
+  <span class="hl opt">(</span>.read ch d<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> add-all <span class="hl opt">[</span>bitsv<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>total-size <span class="hl opt">(</span><span class="hl kwa">inc</span> ^long <span class="hl opt">(/</span> ^long <span class="hl opt">(</span><span class="hl kwa">reduce</span> <span class="hl opt">(</span><span class="hl kwa">fn</span> ^long <span class="hl opt">[</span>a b<span class="hl opt">] (+</span> ^long a ^long <span class="hl opt">(</span>.getSize ^IBits b<span class="hl opt">)))</span> <span class="hl num">0</span> bitsv<span class="hl opt">)</span> <span class="hl num">16</span><span class="hl opt">))</span>
+        all ^IBits <span class="hl opt">(</span><span class="hl kwa">-</span><span class="hl opt">&gt;</span>Bits <span class="hl opt">(</span><span class="hl kwa">int-array</span> total-size<span class="hl opt">)</span> <span class="hl num">0 0 0</span><span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">doseq</span> <span class="hl opt">[</span>^IBits bits bitsv <span class="hl opt">:</span>when <span class="hl opt">(</span><span class="hl kwa">pos</span>? <span class="hl opt">(</span>.getSize bits<span class="hl opt">))]</span>
+      <span class="hl opt">(</span>.addLots all bits<span class="hl opt">))</span>
+    all<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> readb <span class="hl opt">[</span>^ReadableByteChannel ch ^ByteBuffer data ^long n ^long i<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>table ^longs table<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i i
+           n n
+           bits <span class="hl opt">(</span><span class="hl kwa">-</span><span class="hl opt">&gt;</span>Bits <span class="hl opt">(</span><span class="hl kwa">int-array</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> <span class="hl opt">(</span><span class="hl kwa">quot</span> <span class="hl opt">(</span><span class="hl kwa">-</span> n i<span class="hl opt">)</span> <span class="hl num">4</span><span class="hl opt">)))</span> <span class="hl num">0 0 0</span><span class="hl opt">)</span>
+           bitsv <span class="hl opt">[]]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>b <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span>.get data i<span class="hl opt">))]</span>
+          <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(</span><span class="hl kwa">false</span>? <span class="hl opt">(=</span> b <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl num">10</span><span class="hl opt">)))</span> <span class="hl slc">;; if not newline</span>
+            <span class="hl opt">(</span>.add2 ^IBits bits <span class="hl opt">(</span><span class="hl kwa">aget</span> table <span class="hl opt">(</span><span class="hl kwa">bit-and</span> b <span class="hl num">0xFF</span><span class="hl opt">))))</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> n bits bitsv<span class="hl opt">))</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;=</span> n <span class="hl num">0</span><span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">add-all</span> bitsv<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">)]</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">long</span> n<span class="hl opt">) (</span><span class="hl kwa">-</span><span class="hl opt">&gt;</span>Bits <span class="hl opt">(</span><span class="hl kwa">int-array</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> <span class="hl opt">(</span><span class="hl kwa">quot</span> n <span class="hl num">4</span><span class="hl opt">)))</span> <span class="hl num">0 0 0</span><span class="hl opt">) (</span><span class="hl kwa">conj</span> bitsv bits<span class="hl opt">))))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> skip <span class="hl opt">[</span>^ReadableByteChannel ch ^ByteBuffer data ^long n ^long i<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i i
+         n n<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(= (</span><span class="hl kwa">long</span> <span class="hl opt">(</span>.get data i<span class="hl opt">))</span> <span class="hl num">10</span><span class="hl opt">)</span> <span class="hl slc">;; \newline</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(= (</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> n<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">readb</span> ch data <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">)</span> <span class="hl num">0</span><span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">readb</span> ch data n i<span class="hl opt">))</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> n<span class="hl opt">))</span>
+      <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> loadf <span class="hl opt">[</span>^String target<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ch ^ReadableByteChannel <span class="hl opt">(</span><span class="hl kwa">Channels</span><span class="hl opt">/</span>newChannel System<span class="hl opt">/</span>in<span class="hl opt">)</span>
+        tb ^bytes <span class="hl opt">(</span>.getBytes target<span class="hl opt">)</span>
+        tlen <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">alength</span> tb<span class="hl opt">))</span>
+        tl ^longs <span class="hl opt">(</span><span class="hl kwa">long-array</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> tlen<span class="hl opt">))</span> <span class="hl slc">;; pad by 1 space for match termination     </span>
+        data ^ByteBuffer <span class="hl opt">(</span><span class="hl kwa">ByteBuffer</span><span class="hl opt">/</span>allocateDirect <span class="hl num">1048576</span><span class="hl opt">)</span> <span class="hl slc">;; 1024 * 1024</span>
+        n <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">))]</span>
+    <span class="hl opt">(</span><span class="hl kwa">doseq</span> <span class="hl opt">[</span>i <span class="hl opt">(</span><span class="hl kwa">range</span> tlen<span class="hl opt">)]</span>
+      <span class="hl opt">(</span><span class="hl kwa">aset</span> tl i <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> tb i<span class="hl opt">))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl num">0</span><span class="hl opt">)</span>
+           need <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl num">0</span><span class="hl opt">)</span>
+           match <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> tl <span class="hl num">0</span><span class="hl opt">))</span>
+           n <span class="hl opt">(</span><span class="hl kwa">long</span> n<span class="hl opt">)]</span>
+
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> need tlen<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(= (</span><span class="hl kwa">long</span> <span class="hl opt">(</span>.get data i<span class="hl opt">))</span> match<span class="hl opt">)</span>            
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (</span><span class="hl kwa">inc</span> need<span class="hl opt">) (</span><span class="hl kwa">aget</span> tl <span class="hl opt">(</span><span class="hl kwa">inc</span> need<span class="hl opt">))</span> n<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> tl <span class="hl num">0</span><span class="hl opt">))</span> n<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(= (</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> n<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">skip</span> ch data <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">)</span> <span class="hl num">0</span><span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">skip</span> ch data n i<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl num">0</span> need match <span class="hl opt">(</span><span class="hl kwa">r</span> ch data<span class="hl opt">))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defmacro</span> hc <span class="hl opt">[</span>l size<span class="hl opt">]</span>
+  <span class="hl opt">`(</span><span class="hl kwa">bit-and</span> <span class="hl opt">(+</span> ~l <span class="hl opt">(</span><span class="hl kwa">bit-shift-right</span> ~l <span class="hl num">17</span><span class="hl opt">)) (</span><span class="hl kwa">dec</span> ~size<span class="hl opt">)))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defmacro</span> nx <span class="hl opt">[</span>i size<span class="hl opt">]</span>
+  <span class="hl opt">`(</span><span class="hl kwa">bit-and</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> ~i<span class="hl opt">) (</span><span class="hl kwa">dec</span> ~size<span class="hl opt">)))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">def</span> ^<span class="hl opt">:</span>constant decode <span class="hl opt">[</span><span class="hl str">&quot;A&quot;</span> <span class="hl str">&quot;T&quot;</span> <span class="hl str">&quot;G&quot;</span> <span class="hl str">&quot;C&quot;</span><span class="hl opt">])</span>
+<span class="hl opt">(</span><span class="hl kwa">defn</span> l2s <span class="hl opt">[</span>^long l ^long n<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;=</span> n <span class="hl num">0</span><span class="hl opt">)</span>
+    <span class="hl str">&quot;&quot;</span>
+    <span class="hl opt">(</span><span class="hl kwa">str</span> <span class="hl opt">(</span><span class="hl kwa">decode</span> <span class="hl opt">(</span><span class="hl kwa">bit-and</span> l <span class="hl num">0x3</span><span class="hl opt">)) (</span><span class="hl kwa">l2s</span> <span class="hl opt">(</span><span class="hl kwa">unsigned-bit-shift-right</span> l <span class="hl num">2</span><span class="hl opt">) (</span><span class="hl kwa">dec</span> n<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">deftype</span> DnaHash <span class="hl opt">[</span>^long z
+                  ^long size
+                  ^<span class="hl opt">:</span>unsynchronized-mutable ^long n
+                  ^longs keys
+                  ^longs counters<span class="hl opt">]</span>
+  IDnaHash
+  <span class="hl opt">(</span><span class="hl kwa">add</span> <span class="hl opt">[</span>this key count<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>size size
+          keys ^longs keys
+          counters ^longs counters
+          index <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl opt">(</span><span class="hl kwa">hc</span> key size<span class="hl opt">))]</span>
+      <span class="hl opt">(</span><span class="hl kwa">cond</span>
+       <span class="hl slc">;; new key</span>
+       <span class="hl opt">(= (</span><span class="hl kwa">aget</span> counters index<span class="hl opt">)</span> <span class="hl num">0</span><span class="hl opt">)</span>
+       <span class="hl opt">(</span><span class="hl kwa">do</span>
+         <span class="hl opt">(</span><span class="hl kwa">aset</span> keys index key<span class="hl opt">)</span>
+         <span class="hl opt">(</span><span class="hl kwa">aset</span> counters index count<span class="hl opt">)</span>
+         <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl opt">(</span><span class="hl kwa">inc</span> n<span class="hl opt">))</span>
+         this<span class="hl opt">)</span>
+
+       <span class="hl slc">;; existing key</span>
+       <span class="hl opt">(= (</span><span class="hl kwa">aget</span> keys index<span class="hl opt">)</span> key<span class="hl opt">)</span>
+       <span class="hl opt">(</span><span class="hl kwa">do</span>
+         <span class="hl opt">(</span><span class="hl kwa">aset</span> counters index <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> counters index<span class="hl opt">)</span> count<span class="hl opt">))</span>
+         this<span class="hl opt">)</span>
+
+       <span class="hl slc">;; rehash</span>
+       <span class="hl opt">(&gt; (*</span> <span class="hl num">6</span> n<span class="hl opt">)</span> size<span class="hl opt">)</span>
+       <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>newsize <span class="hl opt">(*</span> size <span class="hl num">64</span><span class="hl opt">)</span>
+             newhash <span class="hl opt">(</span><span class="hl kwa">DnaHash</span>. z newsize <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">long-array</span> newsize<span class="hl opt">) (</span><span class="hl kwa">long-array</span> newsize<span class="hl opt">))]</span>
+         <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+           <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i size<span class="hl opt">)</span>
+             <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ci <span class="hl opt">(</span><span class="hl kwa">aget</span> counters i<span class="hl opt">)]</span>
+               <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> ci <span class="hl num">0</span><span class="hl opt">)</span>
+                 <span class="hl opt">(</span>.add newhash <span class="hl opt">(</span><span class="hl kwa">aget</span> keys i<span class="hl opt">)</span> ci<span class="hl opt">))</span>
+               <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))</span>
+             <span class="hl opt">(</span><span class="hl kwa">do</span>
+               <span class="hl opt">(</span>.add newhash key <span class="hl num">1</span><span class="hl opt">)</span>
+               newhash<span class="hl opt">))))</span>
+
+       true
+       <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl opt">(</span><span class="hl kwa">nx</span> index size<span class="hl opt">)]</span>
+         <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ii <span class="hl opt">(</span><span class="hl kwa">int</span> i<span class="hl opt">)]</span>
+           <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">or</span> <span class="hl opt">(=</span> <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> counters ii<span class="hl opt">))</span>
+                   <span class="hl opt">(=</span> key <span class="hl opt">(</span><span class="hl kwa">aget</span> keys ii<span class="hl opt">)))</span>
+             <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(= (</span><span class="hl kwa">aget</span> counters i<span class="hl opt">)</span> <span class="hl num">0</span><span class="hl opt">)</span>
+               <span class="hl opt">(</span><span class="hl kwa">do</span>
+                 <span class="hl opt">(</span><span class="hl kwa">aset</span> keys ii key<span class="hl opt">)</span>
+                 <span class="hl opt">(</span><span class="hl kwa">aset</span> counters ii count<span class="hl opt">)</span>
+                 <span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">!</span> n <span class="hl opt">(</span><span class="hl kwa">inc</span> n<span class="hl opt">))</span>
+                 this<span class="hl opt">)</span>
+               <span class="hl opt">(</span><span class="hl kwa">do</span>
+                 <span class="hl opt">(</span><span class="hl kwa">aset</span> counters ii <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> counters ii<span class="hl opt">)</span> count<span class="hl opt">))</span>
+                 this<span class="hl opt">))</span>
+             <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">nx</span> i size<span class="hl opt">))))))))</span>
+  <span class="hl opt">(</span><span class="hl kwa">get</span> <span class="hl opt">[</span>_ key<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl opt">(</span><span class="hl kwa">hc</span> key size<span class="hl opt">)]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">and</span> <span class="hl opt">(</span><span class="hl kwa">pos</span>? <span class="hl opt">(</span><span class="hl kwa">aget</span> counters i<span class="hl opt">)) (</span><span class="hl kwa">not</span><span class="hl opt">=</span> key <span class="hl opt">(</span><span class="hl kwa">aget</span> keys i<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> i<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">aget</span> counters i<span class="hl opt">))))</span>
+  <span class="hl opt">(</span><span class="hl kwa">printSorted</span> <span class="hl opt">[</span>this<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>tcounts <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>idx <span class="hl num">0</span> acc <span class="hl num">0</span><span class="hl opt">]</span>
+                          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> idx <span class="hl opt">(</span><span class="hl kwa">alength</span> counters<span class="hl opt">))</span>
+                            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> idx<span class="hl opt">) (+</span> acc <span class="hl opt">(</span><span class="hl kwa">aget</span> counters idx<span class="hl opt">)))</span>
+                            acc<span class="hl opt">)))</span>
+          factor <span class="hl opt">(/</span> <span class="hl num">100.0</span> tcounts<span class="hl opt">)</span>
+          freqs <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+                       acc <span class="hl opt">(</span><span class="hl kwa">transient</span> <span class="hl opt">[])]</span>
+                  <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i <span class="hl opt">(</span><span class="hl kwa">alength</span> counters<span class="hl opt">))</span>
+                    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>c <span class="hl opt">(*</span> factor <span class="hl opt">(</span><span class="hl kwa">aget</span> counters i<span class="hl opt">))</span>
+                          k <span class="hl opt">(</span><span class="hl kwa">l2s</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> keys i<span class="hl opt">)</span> z<span class="hl opt">)]</span>
+                      <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (</span><span class="hl kwa">if</span> <span class="hl opt">(&gt;</span> c <span class="hl num">0</span><span class="hl opt">) (</span><span class="hl kwa">conj</span><span class="hl opt">!</span> acc <span class="hl opt">[</span>c k<span class="hl opt">])</span> acc<span class="hl opt">)))</span>
+                    <span class="hl opt">(</span><span class="hl kwa">persistent</span><span class="hl opt">!</span> acc<span class="hl opt">)))</span>
+          s <span class="hl opt">(</span><span class="hl kwa">reverse</span> <span class="hl opt">(</span><span class="hl kwa">sort</span> freqs<span class="hl opt">))]</span>
+      <span class="hl opt">(</span><span class="hl kwa">doseq</span> <span class="hl opt">[[</span>freq label<span class="hl opt">]</span> s<span class="hl opt">]</span>
+        <span class="hl opt">(</span><span class="hl kwa">printf</span> <span class="hl str">&quot;%s %.3f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span> label freq<span class="hl opt">))</span>
+      <span class="hl opt">(</span><span class="hl kwa">println</span><span class="hl opt">))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> prints <span class="hl opt">[</span>^IDnaHash d ^String s<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>bs <span class="hl opt">(</span>.getBytes s<span class="hl opt">)</span>
+        mapped <span class="hl opt">(</span><span class="hl kwa">map</span> <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[</span>^long b<span class="hl opt">] (</span><span class="hl kwa">aget</span> ^longs table <span class="hl opt">(</span><span class="hl kwa">bit-and</span> b <span class="hl num">0xFF</span><span class="hl opt">)))</span> bs<span class="hl opt">)</span>
+        k <span class="hl opt">(</span><span class="hl kwa">reduce</span> <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[</span>^long acc ^long b<span class="hl opt">] (+ (*</span> <span class="hl num">4</span> acc<span class="hl opt">)</span> b<span class="hl opt">))</span> <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">reverse</span> mapped<span class="hl opt">))]</span>
+    <span class="hl opt">(</span><span class="hl kwa">format</span> <span class="hl str">&quot;%d</span><span class="hl esc">\t</span><span class="hl str">%s&quot;</span> <span class="hl opt">(</span>.get d k<span class="hl opt">)</span> s<span class="hl opt">)))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> -main <span class="hl opt">[&amp;</span> args<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>sizes <span class="hl opt">[</span><span class="hl num">1 2 3 4 6 12 18</span><span class="hl opt">]</span>
+        sequence <span class="hl str">&quot;GGTATTTTAATTTATAGT&quot;</span>
+        data ^IBits <span class="hl opt">(</span><span class="hl kwa">loadf</span> <span class="hl str">&quot;&gt;THREE&quot;</span><span class="hl opt">)</span>
+        tasks <span class="hl opt">(</span><span class="hl kwa">doall</span>
+               <span class="hl opt">(</span><span class="hl kwa">map</span> <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[</span>^long n<span class="hl opt">]</span>
+                      <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[]</span>
+                        <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>h <span class="hl opt">(</span><span class="hl kwa">DnaHash</span>. n <span class="hl num">512 0</span> <span class="hl opt">(</span><span class="hl kwa">long-array</span> <span class="hl num">512</span><span class="hl opt">) (</span><span class="hl kwa">long-array</span> <span class="hl num">512</span><span class="hl opt">))</span>
+                               i <span class="hl num">0</span><span class="hl opt">]</span>
+                          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+                            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span>.addToHash data h n i<span class="hl opt">) (</span><span class="hl kwa">inc</span> i<span class="hl opt">))</span>
+                            h<span class="hl opt">))))</span>
+                    sizes<span class="hl opt">))</span>        
+        processors <span class="hl opt">(</span>.. Runtime getRuntime availableProcessors<span class="hl opt">)</span>
+        pool <span class="hl opt">(</span><span class="hl kwa">Executors</span><span class="hl opt">/</span>newFixedThreadPool processors<span class="hl opt">)</span>
+        <span class="hl opt">[</span>f1 f2 <span class="hl opt">:</span>as futures<span class="hl opt">] (</span>.invokeAll pool tasks<span class="hl opt">)]</span>
+    <span class="hl opt">(</span>.printSorted ^DnaHash <span class="hl opt">&#64;</span>f1<span class="hl opt">)</span>
+    <span class="hl opt">(</span>.printSorted ^DnaHash <span class="hl opt">&#64;</span>f2<span class="hl opt">)</span>
+
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[[</span>f <span class="hl opt">&amp;</span> fs<span class="hl opt">] (</span><span class="hl kwa">drop</span> <span class="hl num">2</span> futures<span class="hl opt">)</span>
+           <span class="hl opt">[</span>s <span class="hl opt">&amp;</span> ss<span class="hl opt">] (</span><span class="hl kwa">drop</span> <span class="hl num">2</span> sizes<span class="hl opt">)]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> f
+        <span class="hl opt">(</span><span class="hl kwa">println</span> <span class="hl opt">(</span><span class="hl kwa">prints</span> <span class="hl opt">&#64;</span>f <span class="hl opt">(</span><span class="hl kwa">subs</span> sequence <span class="hl num">0</span> s<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> fs ss<span class="hl opt">)))</span>
+    <span class="hl opt">(</span>.shutdown pool<span class="hl opt">)</span>
+    <span class="hl opt">(</span><span class="hl kwa">shutdown-agents</span><span class="hl opt">)))</span>

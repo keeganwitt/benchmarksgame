@@ -1,0 +1,149 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// Contributed by Jeremy Zerfas</span>
+<span class="hl slc">// Based on the C++ program from Jon Harrop, Alex Mizrahi, and Bruno Coutinho.</span>
+
+<span class="hl slc">// This controls the width of lines that are output by this program.</span>
+<span class="hl ppc">#define MAXIMUM_LINE_WIDTH  60</span>
+
+<span class="hl ppc">#include &lt;stdint.h&gt;</span>
+<span class="hl ppc">#include &lt;stdlib.h&gt;</span>
+<span class="hl ppc">#include &lt;stdio.h&gt;</span>
+
+<span class="hl kwc">typedef</span> off_t off64_t<span class="hl opt">;</span> <span class="hl slc">// This is needed to keep APR happy on 32 bit systems.</span>
+<span class="hl ppc">#include &lt;apr_pools.h&gt;</span>
+
+<span class="hl slc">// intptr_t should be the native integer type on most sane systems.</span>
+<span class="hl kwc">typedef</span> <span class="hl kwb">intptr_t</span> intnative_t<span class="hl opt">;</span>
+
+<span class="hl kwc">typedef</span> <span class="hl kwb">struct</span> tree_node<span class="hl opt">{</span>
+   <span class="hl kwb">struct</span> tree_node   <span class="hl opt">*</span> left_Node<span class="hl opt">, *</span> right_Node<span class="hl opt">;</span>
+   <span class="hl kwb">int32_t</span>            value<span class="hl opt">;</span>
+<span class="hl opt">}</span> tree_node<span class="hl opt">;</span>
+
+
+<span class="hl slc">// Create a binary tree of depth tree_Depth in memory_Pool, set the root node's</span>
+<span class="hl slc">// value to root_Node_Value, and finally return a pointer to the created binary</span>
+<span class="hl slc">// tree.</span>
+<span class="hl kwb">static</span> <span class="hl kwc">inline</span> tree_node <span class="hl opt">*</span> <span class="hl kwd">create_Tree</span><span class="hl opt">(</span><span class="hl kwb">const</span> intnative_t root_Node_Value<span class="hl opt">,</span>
+  <span class="hl kwb">const</span> intnative_t tree_Depth<span class="hl opt">,</span> apr_pool_t <span class="hl opt">*</span> <span class="hl kwb">const</span> memory_Pool<span class="hl opt">){</span>
+   tree_node <span class="hl opt">*</span> <span class="hl kwb">const</span> root_Node<span class="hl opt">=</span><span class="hl kwd">apr_palloc</span><span class="hl opt">(</span>memory_Pool<span class="hl opt">,</span> <span class="hl kwa">sizeof</span><span class="hl opt">(</span>tree_node<span class="hl opt">));</span>
+
+   <span class="hl slc">// If tree_Depth is one or more then recursively call create_Tree() in order</span>
+   <span class="hl slc">// to create the left and right subtrees using 2*root_Node_Value-1 and</span>
+   <span class="hl slc">// 2*root_Node_Value respectively as the root values for those subtrees.</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>tree_Depth<span class="hl opt">&gt;</span><span class="hl num">0</span><span class="hl opt">){</span>
+      root_Node<span class="hl opt">-&gt;</span>left_Node<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(</span><span class="hl num">2</span><span class="hl opt">*</span>root_Node_Value<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">,</span> tree_Depth<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">,</span>
+        memory_Pool<span class="hl opt">);</span>
+      root_Node<span class="hl opt">-&gt;</span>right_Node<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(</span><span class="hl num">2</span><span class="hl opt">*</span>root_Node_Value<span class="hl opt">,</span> tree_Depth<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">,</span>
+        memory_Pool<span class="hl opt">);</span>
+   <span class="hl opt">}</span><span class="hl kwa">else</span>
+      root_Node<span class="hl opt">-&gt;</span>left_Node<span class="hl opt">=</span>root_Node<span class="hl opt">-&gt;</span>right_Node<span class="hl opt">=</span>NULL<span class="hl opt">;</span>
+
+   root_Node<span class="hl opt">-&gt;</span>value<span class="hl opt">=</span>root_Node_Value<span class="hl opt">;</span>
+
+   <span class="hl kwa">return</span> root_Node<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Compute and return the checksum for the binary tree that has root_Node as the</span>
+<span class="hl slc">// root node.</span>
+<span class="hl kwb">static</span> <span class="hl kwc">inline</span> intnative_t <span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>
+  <span class="hl kwb">const</span> tree_node <span class="hl opt">*</span> <span class="hl kwb">const</span> root_Node<span class="hl opt">){</span>
+   <span class="hl slc">// If there are subtrees then recursively call compute_Tree_Checksum() on</span>
+   <span class="hl slc">// them and factor their values into the checksum, otherwise just return</span>
+   <span class="hl slc">// the value of root_Node.</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>root_Node<span class="hl opt">-&gt;</span>left_Node<span class="hl opt">)</span>
+      <span class="hl kwa">return</span> <span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>root_Node<span class="hl opt">-&gt;</span>left_Node<span class="hl opt">)-</span>
+        <span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>root_Node<span class="hl opt">-&gt;</span>right_Node<span class="hl opt">)+</span>root_Node<span class="hl opt">-&gt;</span>value<span class="hl opt">;</span>
+   <span class="hl kwa">else</span>
+      <span class="hl kwa">return</span> root_Node<span class="hl opt">-&gt;</span>value<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl kwb">int</span> <span class="hl kwd">main</span><span class="hl opt">(</span><span class="hl kwb">int</span> argc<span class="hl opt">,</span> <span class="hl kwb">char</span> <span class="hl opt">**</span> argv<span class="hl opt">){</span>
+   <span class="hl slc">// Set minimum_Tree_Depth to 4 and maximum_Tree_Depth to the maximum of what</span>
+   <span class="hl slc">// was specified as the argument to the program and minimum_Tree_Depth+2.</span>
+   <span class="hl kwb">const</span> intnative_t minimum_Tree_Depth<span class="hl opt">=</span><span class="hl num">4</span><span class="hl opt">;</span>
+   intnative_t maximum_Tree_Depth<span class="hl opt">=</span><span class="hl kwd">atoi</span><span class="hl opt">(</span>argv<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]);</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>maximum_Tree_Depth <span class="hl opt">&lt;</span> minimum_Tree_Depth<span class="hl opt">+</span><span class="hl num">2</span><span class="hl opt">)</span>
+      maximum_Tree_Depth<span class="hl opt">=</span>minimum_Tree_Depth<span class="hl opt">+</span><span class="hl num">2</span><span class="hl opt">;</span>
+
+   <span class="hl kwd">apr_initialize</span><span class="hl opt">();</span>
+   apr_pool_t <span class="hl opt">*</span> memory_Pool<span class="hl opt">;</span>
+
+   <span class="hl slc">// Create a memory pool, create a binary tree of depth maximum_Tree_Depth+1,</span>
+   <span class="hl slc">// compute the checksum of the binary tree, print the statistics, and then</span>
+   <span class="hl slc">// delete the memory pool.</span>
+   <span class="hl kwd">apr_pool_create_unmanaged</span><span class="hl opt">(&amp;</span>memory_Pool<span class="hl opt">);</span>
+   tree_node <span class="hl opt">*</span> stretch_Tree<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> maximum_Tree_Depth<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">,</span> memory_Pool<span class="hl opt">);</span>
+   <span class="hl kwd">printf</span><span class="hl opt">(</span><span class="hl str">&quot;stretch tree of depth %jd</span><span class="hl esc">\t</span> <span class="hl str">check: %jd</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span>
+     <span class="hl opt">(</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span>maximum_Tree_Depth<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">,</span>
+     <span class="hl opt">(</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span><span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>stretch_Tree<span class="hl opt">));</span>
+   <span class="hl kwd">apr_pool_destroy</span><span class="hl opt">(</span>memory_Pool<span class="hl opt">);</span>
+
+   <span class="hl slc">// Create a memory pool and then create a long-lived binary tree of depth</span>
+   <span class="hl slc">// maximum_Tree_Depth which will be left alone for a while while</span>
+   <span class="hl slc">// more binary trees get allocated and deallocaited as required by the</span>
+   <span class="hl slc">// rules. We'll finish working with this later.</span>
+   <span class="hl kwd">apr_pool_create_unmanaged</span><span class="hl opt">(&amp;</span>memory_Pool<span class="hl opt">);</span>
+   tree_node <span class="hl opt">*</span> long_Lived_Tree<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> maximum_Tree_Depth<span class="hl opt">,</span> memory_Pool<span class="hl opt">);</span>
+
+   <span class="hl slc">// Create a lot of binary trees in parallel of depths ranging from</span>
+   <span class="hl slc">// minimum_Tree_Depth to maximum_Tree_Depth, compute and tally up all their</span>
+   <span class="hl slc">// checksums, destroy the trees, and then record the statistics to</span>
+   <span class="hl slc">// output_Buffer[] so they can be displayed in order later.</span>
+   <span class="hl kwb">char</span> output_Buffer<span class="hl opt">[</span>maximum_Tree_Depth<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">][</span>MAXIMUM_LINE_WIDTH<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">];</span>
+   intnative_t current_Tree_Depth<span class="hl opt">;</span>
+   <span class="hl ppc">#pragma omp parallel for</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>current_Tree_Depth<span class="hl opt">=</span>minimum_Tree_Depth<span class="hl opt">;</span>
+     current_Tree_Depth<span class="hl opt">&lt;=</span>maximum_Tree_Depth<span class="hl opt">;</span> current_Tree_Depth<span class="hl opt">+=</span><span class="hl num">2</span><span class="hl opt">){</span>
+      intnative_t iterations<span class="hl opt">=</span><span class="hl num">1</span><span class="hl opt">&lt;&lt;(</span>maximum_Tree_Depth<span class="hl opt">-</span>current_Tree_Depth<span class="hl opt">+</span>
+        minimum_Tree_Depth<span class="hl opt">);</span>
+
+      <span class="hl slc">// Create a memory pool for this thread to use.</span>
+      apr_pool_t <span class="hl opt">*</span> thread_Memory_Pool<span class="hl opt">;</span>
+      <span class="hl kwd">apr_pool_create_unmanaged</span><span class="hl opt">(&amp;</span>thread_Memory_Pool<span class="hl opt">);</span>
+
+      intnative_t i<span class="hl opt">=</span><span class="hl num">1</span><span class="hl opt">,</span> total_Trees_Checksum<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+      <span class="hl kwa">for</span><span class="hl opt">(;</span> i<span class="hl opt">&lt;=</span>iterations<span class="hl opt">; ++</span>i<span class="hl opt">){</span>
+         <span class="hl slc">// Create two binary trees of depth current_Tree_Depth but with one</span>
+         <span class="hl slc">// having a root node value of i and the other a root node value of</span>
+         <span class="hl slc">// -1.</span>
+         tree_node <span class="hl opt">*</span> <span class="hl kwb">const</span> tree_1<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(</span>i<span class="hl opt">,</span> current_Tree_Depth<span class="hl opt">,</span>
+           thread_Memory_Pool<span class="hl opt">);</span>
+         tree_node <span class="hl opt">*</span> <span class="hl kwb">const</span> tree_2<span class="hl opt">=</span><span class="hl kwd">create_Tree</span><span class="hl opt">(-</span>i<span class="hl opt">,</span> current_Tree_Depth<span class="hl opt">,</span>
+           thread_Memory_Pool<span class="hl opt">);</span>
+
+         <span class="hl slc">// Compute the checksums for both trees and add them to</span>
+         <span class="hl slc">// total_Trees_Checksum.</span>
+         total_Trees_Checksum<span class="hl opt">+=</span><span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>tree_1<span class="hl opt">)+</span>
+           <span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>tree_2<span class="hl opt">);</span>
+
+         <span class="hl kwd">apr_pool_clear</span><span class="hl opt">(</span>thread_Memory_Pool<span class="hl opt">);</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl kwd">apr_pool_destroy</span><span class="hl opt">(</span>thread_Memory_Pool<span class="hl opt">);</span>
+
+      <span class="hl slc">// Record the statistics for the trees of depth current_Tree_Depth.</span>
+      <span class="hl kwd">sprintf</span><span class="hl opt">(</span>output_Buffer<span class="hl opt">[</span>current_Tree_Depth<span class="hl opt">],</span>
+        <span class="hl str">&quot;%jd</span><span class="hl esc">\t</span> <span class="hl str">trees of depth %jd</span><span class="hl esc">\t</span> <span class="hl str">check: %jd</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">, (</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span><span class="hl num">2</span><span class="hl opt">*</span>iterations<span class="hl opt">,</span>
+        <span class="hl opt">(</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span>current_Tree_Depth<span class="hl opt">, (</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span>total_Trees_Checksum<span class="hl opt">);</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl slc">// Print the statistics for all of the various tree depths.</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>current_Tree_Depth<span class="hl opt">=</span>minimum_Tree_Depth<span class="hl opt">;</span>
+     current_Tree_Depth<span class="hl opt">&lt;=</span>maximum_Tree_Depth<span class="hl opt">;</span> current_Tree_Depth<span class="hl opt">+=</span><span class="hl num">2</span><span class="hl opt">)</span>
+      <span class="hl kwd">printf</span><span class="hl opt">(</span><span class="hl str">&quot;%s&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span>current_Tree_Depth<span class="hl opt">]);</span>
+
+   <span class="hl slc">// Compute the checksum of the long-lived binary tree that we created</span>
+   <span class="hl slc">// earlier, print the statistics, and then delete the memory pool.</span>
+   <span class="hl kwd">printf</span><span class="hl opt">(</span><span class="hl str">&quot;long lived tree of depth %jd</span><span class="hl esc">\t</span> <span class="hl str">check: %jd</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span>
+     <span class="hl opt">(</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span>maximum_Tree_Depth<span class="hl opt">,</span>
+     <span class="hl opt">(</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span><span class="hl kwd">compute_Tree_Checksum</span><span class="hl opt">(</span>long_Lived_Tree<span class="hl opt">));</span>
+   <span class="hl kwd">apr_pool_destroy</span><span class="hl opt">(</span>memory_Pool<span class="hl opt">);</span>
+
+   <span class="hl kwd">apr_terminate</span><span class="hl opt">();</span>
+   <span class="hl kwa">return</span> <span class="hl num">0</span><span class="hl opt">;</span>
+<span class="hl opt">}</span>

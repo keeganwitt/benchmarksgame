@@ -1,0 +1,149 @@
+<span class="hl slc">;;   The Computer Language Benchmarks Game</span>
+<span class="hl slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="hl slc">;; adapted from Java #2</span>
+<span class="hl slc">;; contributed by Alex Miller</span>
+
+<span class="hl opt">(</span><span class="hl kwa">ns</span> nbody
+  <span class="hl opt">(:</span>gen-class<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>warn-on-reflection<span class="hl opt">*</span> true<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>unchecked-math<span class="hl opt">*</span> true<span class="hl opt">)</span>
+
+<span class="hl slc">;; Body = double[x y z vx vy vz mass]</span>
+<span class="hl slc">;; System = double[][]</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> init-system <span class="hl opt">[]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>solar-mass <span class="hl opt">(*</span> <span class="hl num">3.141592653589793 3.141592653589793 4.0</span><span class="hl opt">)</span>
+        days-per-year <span class="hl num">365.24</span>
+        sun <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl opt">[</span><span class="hl num">0.0 0.0 0.0 0.0 0.0 0.0</span> solar-mass<span class="hl opt">])</span>
+        jupiter <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl opt">[</span><span class="hl num">4.84143144246472090e+00</span>
+                               -<span class="hl num">1.16032004402742839e+00</span>
+                               -<span class="hl num">1.03622044471123109e-01</span>
+                               <span class="hl opt">(*</span> <span class="hl num">1.66007664274403694e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">7.69901118419740425e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> -<span class="hl num">6.90460016972063023e-05</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">9.54791938424326609e-04</span> solar-mass<span class="hl opt">)])</span>
+        saturn  <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl opt">[</span><span class="hl num">8.34336671824457987e+00</span>
+                               <span class="hl num">4.12479856412430479e+00</span>
+                               -<span class="hl num">4.03523417114321381e-01</span>
+                               <span class="hl opt">(*</span> -<span class="hl num">2.76742510726862411e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">4.99852801234917238e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">2.30417297573763929e-05</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">2.85885980666130812e-04</span> solar-mass<span class="hl opt">)])</span>
+        uranus <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl opt">[</span><span class="hl num">1.28943695621391310e+01</span>
+                              -<span class="hl num">1.51111514016986312e+01</span>
+                              -<span class="hl num">2.23307578892655734e-01</span>
+                              <span class="hl opt">(*</span> <span class="hl num">2.96460137564761618e-03</span> days-per-year<span class="hl opt">)</span>
+                              <span class="hl opt">(*</span> <span class="hl num">2.37847173959480950e-03</span> days-per-year<span class="hl opt">)</span>
+                              <span class="hl opt">(*</span> -<span class="hl num">2.96589568540237556e-05</span> days-per-year<span class="hl opt">)</span>
+                              <span class="hl opt">(*</span> <span class="hl num">4.36624404335156298e-05</span> solar-mass<span class="hl opt">)])</span>
+        neptune <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl opt">[</span><span class="hl num">1.53796971148509165e+01</span>
+                               -<span class="hl num">2.59193146099879641e+01</span>
+                               <span class="hl num">1.79258772950371181e-01</span>
+                               <span class="hl opt">(*</span> <span class="hl num">2.68067772490389322e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">1.62824170038242295e-03</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> -<span class="hl num">9.51592254519715870e-05</span> days-per-year<span class="hl opt">)</span>
+                               <span class="hl opt">(*</span> <span class="hl num">5.15138902046611451e-05</span> solar-mass<span class="hl opt">)])</span>
+        bodies <span class="hl opt">(</span><span class="hl kwa">object-array</span> <span class="hl opt">[</span>sun jupiter saturn uranus neptune<span class="hl opt">])]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>px <span class="hl num">0.0</span>
+           py <span class="hl num">0.0</span>
+           pz <span class="hl num">0.0</span>
+           i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i <span class="hl opt">(</span><span class="hl kwa">alength</span> bodies<span class="hl opt">))</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>b ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> bodies i<span class="hl opt">)</span>
+              bmass <span class="hl opt">(</span><span class="hl kwa">aget</span> b <span class="hl num">6</span><span class="hl opt">)]</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(+</span> px <span class="hl opt">(* (</span><span class="hl kwa">aget</span> b <span class="hl num">3</span><span class="hl opt">)</span> bmass<span class="hl opt">))</span>
+                 <span class="hl opt">(+</span> py <span class="hl opt">(* (</span><span class="hl kwa">aget</span> b <span class="hl num">4</span><span class="hl opt">)</span> bmass<span class="hl opt">))</span>
+                 <span class="hl opt">(+</span> pz <span class="hl opt">(* (</span><span class="hl kwa">aget</span> b <span class="hl num">5</span><span class="hl opt">)</span> bmass<span class="hl opt">))</span>
+                 <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> sun <span class="hl num">3</span> <span class="hl opt">(/ (</span><span class="hl kwa">-</span> <span class="hl num">0</span> px<span class="hl opt">)</span> solar-mass<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> sun <span class="hl num">4</span> <span class="hl opt">(/ (</span><span class="hl kwa">-</span> <span class="hl num">0</span> py<span class="hl opt">)</span> solar-mass<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> sun <span class="hl num">5</span> <span class="hl opt">(/ (</span><span class="hl kwa">-</span> <span class="hl num">0</span> pz<span class="hl opt">)</span> solar-mass<span class="hl opt">))</span>
+          bodies<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> energy ^double <span class="hl opt">[</span>^objects system<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">alength</span> system<span class="hl opt">)</span>
+        X <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">0</span><span class="hl opt">)</span>
+        Y <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">1</span><span class="hl opt">)</span>
+        Z <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">2</span><span class="hl opt">)</span>
+        VX <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">3</span><span class="hl opt">)</span>
+        VY <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">4</span><span class="hl opt">)</span>
+        VZ <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">5</span><span class="hl opt">)</span>
+        MASS <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">6</span><span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+           j <span class="hl num">0</span>
+           e <span class="hl num">0.0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> j <span class="hl num">0</span><span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ib ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system i<span class="hl opt">)</span>
+                bvx <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VX<span class="hl opt">)</span>
+                bvy <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VY<span class="hl opt">)</span>
+                bvz <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VZ<span class="hl opt">)]</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> i <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (+</span> e <span class="hl opt">(*</span> <span class="hl num">0.5</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib MASS<span class="hl opt">)</span>
+                                     <span class="hl opt">(+ (*</span> bvx bvx<span class="hl opt">)</span>
+                                        <span class="hl opt">(*</span> bvy bvy<span class="hl opt">)</span>
+                                        <span class="hl opt">(*</span> bvz bvz<span class="hl opt">))))))</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> j n<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ib ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system i<span class="hl opt">)</span>
+                  jb ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system j<span class="hl opt">)</span>
+                  dx <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib X<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb X<span class="hl opt">))</span>
+                  dy <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib Y<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb Y<span class="hl opt">))</span>
+                  dz <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib Z<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb Z<span class="hl opt">))</span>
+                  dist <span class="hl opt">(</span><span class="hl kwa">Math</span><span class="hl opt">/</span>sqrt <span class="hl opt">(+ (*</span> dx dx<span class="hl opt">) (*</span> dy dy<span class="hl opt">) (*</span> dz dz<span class="hl opt">)))]</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> i <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">) (</span><span class="hl kwa">-</span> e <span class="hl opt">(/ (* (</span><span class="hl kwa">aget</span> ib MASS<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb MASS<span class="hl opt">))</span> dist<span class="hl opt">))))</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> <span class="hl num">0</span> e<span class="hl opt">)))</span>
+        e<span class="hl opt">))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> advance <span class="hl opt">[</span>^objects system ^double dt<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">alength</span> system<span class="hl opt">))</span>
+        X <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">0</span><span class="hl opt">)</span>
+        Y <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">1</span><span class="hl opt">)</span>
+        Z <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">2</span><span class="hl opt">)</span>
+        VX <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">3</span><span class="hl opt">)</span>
+        VY <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">4</span><span class="hl opt">)</span>
+        VZ <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">5</span><span class="hl opt">)</span>
+        MASS <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">6</span><span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+           j <span class="hl num">1</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> j n<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>ib ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system i<span class="hl opt">)</span>
+                jb ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system j<span class="hl opt">)</span>
+                dx <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib X<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb X<span class="hl opt">))</span>
+                dy <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib Y<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb Y<span class="hl opt">))</span>
+                dz <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib Z<span class="hl opt">) (</span><span class="hl kwa">aget</span> jb Z<span class="hl opt">))</span>
+                dsq <span class="hl opt">(+ (*</span> dx dx<span class="hl opt">) (*</span> dy dy<span class="hl opt">) (*</span> dz dz<span class="hl opt">))</span>
+                dist <span class="hl opt">(</span><span class="hl kwa">Math</span><span class="hl opt">/</span>sqrt dsq<span class="hl opt">)</span>
+                mag <span class="hl opt">(/</span> dt <span class="hl opt">(*</span> dsq dist<span class="hl opt">))</span>
+                imassmag <span class="hl opt">(* (</span><span class="hl kwa">aget</span> ib MASS<span class="hl opt">)</span> mag<span class="hl opt">)</span>
+                jmassmag <span class="hl opt">(* (</span><span class="hl kwa">aget</span> jb MASS<span class="hl opt">)</span> mag<span class="hl opt">)]</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> ib VX <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VX<span class="hl opt">) (*</span> dx jmassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> ib VY <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VY<span class="hl opt">) (*</span> dy jmassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> ib VZ <span class="hl opt">(</span><span class="hl kwa">-</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> ib VZ<span class="hl opt">) (*</span> dz jmassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> jb VX <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> jb VX<span class="hl opt">) (*</span> dx imassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> jb VY <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> jb VY<span class="hl opt">) (*</span> dy imassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> jb VZ <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> jb VZ<span class="hl opt">) (*</span> dz imassmag<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> i <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">)))</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (+</span> i <span class="hl num">2</span><span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>k <span class="hl num">0</span><span class="hl opt">]</span>
+          <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> k n<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>b ^doubles <span class="hl opt">(</span><span class="hl kwa">aget</span> system k<span class="hl opt">)]</span>
+              <span class="hl opt">(</span><span class="hl kwa">aset</span> b X <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> b X<span class="hl opt">) (*</span> dt <span class="hl opt">(</span><span class="hl kwa">aget</span> b VX<span class="hl opt">))))</span>
+              <span class="hl opt">(</span><span class="hl kwa">aset</span> b Y <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> b Y<span class="hl opt">) (*</span> dt <span class="hl opt">(</span><span class="hl kwa">aget</span> b VY<span class="hl opt">))))</span>
+              <span class="hl opt">(</span><span class="hl kwa">aset</span> b Z <span class="hl opt">(+ (</span><span class="hl kwa">aget</span> b Z<span class="hl opt">) (*</span> dt <span class="hl opt">(</span><span class="hl kwa">aget</span> b VZ<span class="hl opt">))))</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> k<span class="hl opt">)))))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> -main <span class="hl opt">[&amp;</span> args<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">pos</span>? <span class="hl opt">(</span><span class="hl kwa">count</span> args<span class="hl opt">)) (</span><span class="hl kwa">Long</span><span class="hl opt">/</span>parseLong <span class="hl opt">(</span><span class="hl kwa">first</span> args<span class="hl opt">))</span> <span class="hl num">10</span><span class="hl opt">))</span>
+        system ^objects <span class="hl opt">(</span><span class="hl kwa">init-system</span><span class="hl opt">)]</span>    
+    <span class="hl opt">(</span><span class="hl kwa">printf</span> <span class="hl str">&quot;%.9f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span> <span class="hl opt">(</span><span class="hl kwa">energy</span> system<span class="hl opt">))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">advance</span> system <span class="hl num">0.01</span><span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">printf</span> <span class="hl str">&quot;%.9f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span> <span class="hl opt">(</span><span class="hl kwa">energy</span> system<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">flush</span><span class="hl opt">))))))</span>

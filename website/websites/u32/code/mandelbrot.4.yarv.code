@@ -1,0 +1,138 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="hl slc">#</span>
+<span class="hl slc"># Contributed by Aaron Tavistock</span>
+
+<span class="hl kwa">require</span> <span class="hl str">'thread'</span>
+
+<span class="hl kwa">class</span> ThreadPool
+  
+  <span class="hl kwa">def</span> initialize
+    <span class="hl kwb">&#64;work</span> <span class="hl opt">=</span> Queue<span class="hl opt">.</span>new
+    <span class="hl kwb">&#64;pool</span> <span class="hl opt">=</span> Array<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>cpu_count) <span class="hl kwa">do</span> <span class="hl opt">|</span>i<span class="hl opt">|</span>
+      Thread<span class="hl opt">.</span>new <span class="hl kwa">do</span>
+        Thread<span class="hl opt">.</span>current<span class="hl opt">[</span><span class="hl kwc">:id</span><span class="hl opt">] =</span> i
+        <span class="hl kwd">catch</span><span class="hl opt">(</span><span class="hl kwc">:exit</span>) <span class="hl kwa">do</span>
+          <span class="hl kwa">while</span><span class="hl opt">(</span><span class="hl kwa">true</span>) <span class="hl kwa">do</span>
+            work<span class="hl opt">,</span> args <span class="hl opt">=</span> <span class="hl kwb">&#64;work</span><span class="hl opt">.</span>pop
+            work<span class="hl opt">.</span><span class="hl kwd">call</span><span class="hl opt">(*</span>args)
+          <span class="hl kwa">end</span>
+        <span class="hl kwa">end</span>
+      <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>      
+  <span class="hl kwa">end</span>
+  
+  <span class="hl kwa">def</span> <span class="hl kwd">schedule</span><span class="hl opt">(*</span>args<span class="hl opt">, &amp;</span>block)
+    <span class="hl kwb">&#64;work</span> <span class="hl opt">&lt;&lt; [</span>block<span class="hl opt">,</span> args<span class="hl opt">]</span>
+  <span class="hl kwa">end</span>
+  
+  <span class="hl kwa">def</span> shutdown
+    <span class="hl kwb">&#64;pool</span><span class="hl opt">.</span>size<span class="hl opt">.</span>times <span class="hl kwa">do</span>
+      schedule <span class="hl esc">{ throw :exit }</span>
+    <span class="hl kwa">end</span>
+    <span class="hl kwb">&#64;pool</span><span class="hl opt">.</span>each <span class="hl kwa">do</span> <span class="hl opt">|</span>t<span class="hl opt">|</span>
+      t<span class="hl opt">.</span>join
+    <span class="hl kwa">end</span>
+  <span class="hl kwa">end</span> 
+  
+  private 
+  
+  <span class="hl kwa">def</span> cpu_count
+    <span class="hl kwa">begin</span>
+      <span class="hl kwa">if</span> File<span class="hl opt">.</span>readable<span class="hl opt">?(</span><span class="hl str">'/proc/cpuinfo'</span>) <span class="hl slc"># Linux</span>
+        <span class="hl opt">%</span>x<span class="hl opt">[</span>cat <span class="hl kwc">/proc/</span>cpuinfo <span class="hl opt">|</span> grep <span class="hl opt">-</span>c processor<span class="hl opt">].</span>chomp<span class="hl opt">.</span>to_i
+      <span class="hl kwa">elsif</span> File<span class="hl opt">.</span>executable<span class="hl opt">?(</span><span class="hl str">'/usr/sbin/sysctl')  # OS/X</span>
+<span class="hl str">        %x[/usr/sbin/sysctl -n hw.ncpu].chomp.to_i</span>
+<span class="hl str">      else </span>
+<span class="hl str">        1</span>
+<span class="hl str">      end</span>
+<span class="hl str">    rescue</span>
+<span class="hl str">      1</span>
+<span class="hl str">    end</span>
+<span class="hl str">  end</span>
+<span class="hl str">  </span>
+<span class="hl str">end</span>
+<span class="hl str"></span>
+<span class="hl str">class Mandel</span>
+<span class="hl str">  </span>
+<span class="hl str">  attr_reader :output</span>
+<span class="hl str">  </span>
+<span class="hl str">  def initialize(size)</span>
+<span class="hl str">    &#64;size = size.to_i</span>
+<span class="hl str">    &#64;workers = ThreadPool.new</span>
+<span class="hl str">    &#64;output = Array.new(&#64;size)</span>
+<span class="hl str">  end</span>
+<span class="hl str"></span>
+<span class="hl str">  def process</span>
+<span class="hl str">    &#64;size.times do |row|</span>
+<span class="hl str">      &#64;workers.schedule(row) do |y|        </span>
+<span class="hl str">        ci = (2.0 * y.to_f / &#64;size.to_f ) - 1.0</span>
+<span class="hl str">        &#64;output[y] = render_row(ci, &#64;size)</span>
+<span class="hl str">      end</span>
+<span class="hl str">    end</span>
+<span class="hl str">    &#64;workers.shutdown</span>
+<span class="hl str">  end</span>
+<span class="hl str">  </span>
+<span class="hl str">  def self.render(size)</span>
+<span class="hl str">    m = Mandel.new(size)</span>
+<span class="hl str">    m.process</span>
+<span class="hl str">    print &quot;</span><span class="hl esc">#{m.header}</span><span class="hl str">\n</span><span class="hl esc">#{m.output.join}</span><span class="hl str">&quot;</span>
+<span class="hl str">  end</span>
+<span class="hl str">  </span>
+<span class="hl str">  def header</span>
+<span class="hl str">    &quot;P4\n</span><span class="hl esc">#{&#64;size}</span> <span class="hl str"></span><span class="hl esc">#{&#64;size}</span><span class="hl str">&quot;</span>
+<span class="hl str">  end</span>
+<span class="hl str"></span>
+<span class="hl str">  private</span>
+<span class="hl str">  </span>
+<span class="hl str">  def render_row(ci, size)</span>
+<span class="hl str">    row_bits = Array.new(size) do |col|</span>
+<span class="hl str">      cr = (2.0 * col.to_f / size.to_f) - 1.5</span>
+<span class="hl str">      [cr, ci]</span>
+<span class="hl str">    end</span>
+<span class="hl str">  </span>
+<span class="hl str">    row = []</span>
+<span class="hl str">    row_bits.each_slice(8) do |bits|</span>
+<span class="hl str">      row &lt;&lt; render_byte(bits)</span>
+<span class="hl str">    end</span>
+<span class="hl str">    row.join</span>
+<span class="hl str">  end</span>
+<span class="hl str"></span>
+<span class="hl str">  def render_byte(bit_data)</span>
+<span class="hl str">    byte_acc = 0</span>
+<span class="hl str">    bit_data.each do |cr_ci|</span>
+<span class="hl str">      byte_acc = (byte_acc &lt;&lt; 1) | get_bit_or(*cr_ci)</span>
+<span class="hl str">    end</span>
+<span class="hl str">    if remaining_bits = bit_data.size - 8</span>
+<span class="hl str">      byte_acc &lt;&lt;= remaining_bits</span>
+<span class="hl str">    end</span>
+<span class="hl str">    byte_acc.chr</span>
+<span class="hl str">  end</span>
+<span class="hl str"></span>
+<span class="hl str">  def get_bit_or(cr, ci)</span>
+<span class="hl str">    zrzr = 0.0</span>
+<span class="hl str">    zizi = 0.0</span>
+<span class="hl str">    zrzi = 0.0</span>
+<span class="hl str"></span>
+<span class="hl str">    count = 50</span>
+<span class="hl str">    while count &gt; 0</span>
+<span class="hl str">      </span>
+<span class="hl str">      zr = zrzr - zizi + cr</span>
+<span class="hl str">      zi = 2.0 * zrzi + ci</span>
+<span class="hl str"></span>
+<span class="hl str"></span>      <span class="hl esc">#</span> <span class="hl str">preserve recalculation</span>
+<span class="hl str">      zrzr = zr*zr</span>
+<span class="hl str">      zizi = zi*zi</span>
+<span class="hl str">      zrzi = zr*zi</span>
+<span class="hl str"></span>
+<span class="hl str">      return 0b0 if zrzr + zizi &gt; 4.0</span>
+<span class="hl str">        </span>
+<span class="hl str">      count -= 1</span>
+<span class="hl str">    end</span>
+<span class="hl str"></span>
+<span class="hl str">    0b1</span>
+<span class="hl str">  end</span>
+<span class="hl str"></span>
+<span class="hl str">end</span>
+<span class="hl str"></span>
+<span class="hl str">Mandel.render(ARGV.shift)</span>

@@ -1,0 +1,68 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com"></span>
+<span class="hl com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"></span>
+<span class="hl com">   Contributed by Philip Rogers</span>
+<span class="hl com">   Based on a javascript implementation by Jesse Millikan and Matt Baker</span>
+<span class="hl com">*/</span>
+
+<span class="hl kwa">import</span> <span class="hl str">'dart:io'</span><span class="hl opt">;</span>
+<span class="hl kwa">import</span> <span class="hl str">'dart:collection'</span><span class="hl opt">;</span>
+
+String <span class="hl kwd">readLine</span><span class="hl opt">() =&gt;</span> stdin<span class="hl opt">.</span><span class="hl kwd">readLineSync</span><span class="hl opt">();</span>
+
+String <span class="hl kwd">readInput</span><span class="hl opt">() {</span>
+  <span class="hl kwa">while</span><span class="hl opt">(</span><span class="hl kwd">readLine</span><span class="hl opt">().</span><span class="hl kwd">substring</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> <span class="hl num">6</span><span class="hl opt">) !=</span> <span class="hl str">'&gt;THREE'</span><span class="hl opt">);</span>
+
+  List<span class="hl opt">&lt;</span>String<span class="hl opt">&gt;</span> lines <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">List</span><span class="hl opt">();</span>
+  String line <span class="hl opt">=</span> <span class="hl kwd">readLine</span><span class="hl opt">();</span>
+  <span class="hl kwa">while</span> <span class="hl opt">(</span>line <span class="hl opt">!=</span> <span class="hl kwa">null</span> <span class="hl opt">&amp;&amp;</span> line<span class="hl kwc">[0]</span> <span class="hl opt">!=</span> <span class="hl str">'&gt;'</span><span class="hl opt">) {</span>
+    lines<span class="hl opt">.</span><span class="hl kwd">add</span><span class="hl opt">(</span>line<span class="hl opt">);</span>
+    line <span class="hl opt">=</span> <span class="hl kwd">readLine</span><span class="hl opt">();</span>
+  <span class="hl opt">};</span>
+  <span class="hl kwa">return</span> lines<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">''</span><span class="hl opt">).</span><span class="hl kwd">toUpperCase</span><span class="hl opt">();</span>
+<span class="hl opt">}</span>
+
+HashMap<span class="hl opt">&lt;</span>String<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">&gt;</span> <span class="hl kwd">frequency</span><span class="hl opt">(</span>String sequence<span class="hl opt">,</span> <span class="hl kwb">int</span> length<span class="hl opt">) {</span>
+  HashMap<span class="hl opt">&lt;</span>String<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">&gt;</span> freq <span class="hl opt">=</span> <span class="hl kwa">new</span> HashMap<span class="hl opt">&lt;</span>String<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">&gt;();</span>
+  <span class="hl kwb">int</span> n <span class="hl opt">=</span> sequence<span class="hl opt">.</span>length <span class="hl opt">-</span> length <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+  String sub<span class="hl opt">;</span>
+  <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> n<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+    sub <span class="hl opt">=</span> sequence<span class="hl opt">.</span><span class="hl kwd">substring</span><span class="hl opt">(</span>i<span class="hl opt">,</span> i <span class="hl opt">+</span> length<span class="hl opt">);</span>
+    <span class="hl kwa">if</span> <span class="hl opt">(</span>freq<span class="hl opt">.</span><span class="hl kwd">containsKey</span><span class="hl opt">(</span>sub<span class="hl opt">))</span>
+      freq<span class="hl kwc">[sub]</span> <span class="hl opt">=</span> freq<span class="hl kwc">[sub]</span> <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+    <span class="hl kwa">else</span>
+      freq<span class="hl kwc">[sub]</span> <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+  <span class="hl opt">}</span>
+  <span class="hl kwa">return</span> freq<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">void</span> <span class="hl kwd">sort</span><span class="hl opt">(</span>String sequence<span class="hl opt">,</span> <span class="hl kwb">int</span> length<span class="hl opt">) {</span>
+  HashMap<span class="hl opt">&lt;</span>String<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">&gt;</span> freq <span class="hl opt">=</span> <span class="hl kwd">frequency</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> length<span class="hl opt">);</span>
+  List<span class="hl opt">&lt;</span>String<span class="hl opt">&gt;</span> keys <span class="hl opt">=</span> freq<span class="hl opt">.</span>keys<span class="hl opt">.</span><span class="hl kwd">toList</span><span class="hl opt">();</span>
+  <span class="hl kwb">int</span> n <span class="hl opt">=</span> sequence<span class="hl opt">.</span>length <span class="hl opt">-</span> length <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+  keys<span class="hl opt">.</span><span class="hl kwd">sort</span><span class="hl opt">((</span>a<span class="hl opt">,</span> b<span class="hl opt">) =&gt; (</span>freq<span class="hl kwc">[b]</span> <span class="hl opt">-</span> freq<span class="hl kwc">[a]</span><span class="hl opt">));</span>
+  <span class="hl kwa">for</span> <span class="hl opt">(</span>String key <span class="hl kwa">in</span> keys<span class="hl opt">) {</span>
+    String count <span class="hl opt">= (</span>freq<span class="hl kwc">[key]</span> <span class="hl opt">*</span> <span class="hl num">100</span> <span class="hl opt">/</span> n<span class="hl opt">).</span><span class="hl kwd">toStringAsFixed</span><span class="hl opt">(</span><span class="hl num">3</span><span class="hl opt">);</span>
+    <span class="hl kwd">print</span><span class="hl opt">(</span><span class="hl str">'$key $count'</span><span class="hl opt">);</span>
+  <span class="hl opt">}</span>
+  <span class="hl kwd">print</span><span class="hl opt">(</span><span class="hl str">''</span><span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">void</span> <span class="hl kwd">find</span><span class="hl opt">(</span>String sequence<span class="hl opt">,</span> String string<span class="hl opt">) {</span>
+  HashMap<span class="hl opt">&lt;</span>String<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">&gt;</span> freq <span class="hl opt">=</span> <span class="hl kwd">frequency</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> string<span class="hl opt">.</span>length<span class="hl opt">);</span>
+  <span class="hl kwd">print</span><span class="hl opt">(</span><span class="hl str">'${(freq[string])}</span><span class="hl esc">\t</span><span class="hl str">$string'</span><span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">void</span> <span class="hl kwd">main</span><span class="hl opt">(</span>args<span class="hl opt">) {</span>
+  String sequence <span class="hl opt">=</span> <span class="hl kwd">readInput</span><span class="hl opt">();</span>
+  <span class="hl kwa">if</span> <span class="hl opt">(</span>sequence <span class="hl opt">==</span> <span class="hl kwa">null</span><span class="hl opt">)</span>
+    <span class="hl kwa">return</span><span class="hl opt">;</span>
+  <span class="hl kwd">sort</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">);</span>
+  <span class="hl kwd">sort</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">);</span>
+  <span class="hl kwd">find</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl str">'GGT'</span><span class="hl opt">);</span>
+  <span class="hl kwd">find</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl str">'GGTA'</span><span class="hl opt">);</span>
+  <span class="hl kwd">find</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl str">'GGTATT'</span><span class="hl opt">);</span>
+  <span class="hl kwd">find</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl str">'GGTATTTTAATT'</span><span class="hl opt">);</span>
+  <span class="hl kwd">find</span><span class="hl opt">(</span>sequence<span class="hl opt">,</span> <span class="hl str">'GGTATTTTAATTTATAGT'</span><span class="hl opt">);</span>
+<span class="hl opt">}</span>

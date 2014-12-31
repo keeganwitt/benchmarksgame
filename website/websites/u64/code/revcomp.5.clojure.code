@@ -1,0 +1,75 @@
+<span class="hl slc">;;   The Computer Language Benchmarks Game</span>
+<span class="hl slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">;;</span>
+<span class="hl slc">;; ported from Scala revcomp #8</span>
+<span class="hl slc">;; contributed by Alex Miller</span>
+
+<span class="hl opt">(</span><span class="hl kwa">ns</span> revcomp
+  <span class="hl opt">(:</span>gen-class<span class="hl opt">)</span>
+  <span class="hl opt">(:</span>import <span class="hl opt">[</span>java.util.concurrent ForkJoinPool ForkJoinTask<span class="hl opt">]))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>warn-on-reflection<span class="hl opt">*</span> true<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>unchecked-math<span class="hl opt">*</span> true<span class="hl opt">)</span>
+
+<span class="hl opt">(</span><span class="hl kwa">def</span> bs <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>bs <span class="hl opt">(</span><span class="hl kwa">byte-array</span> <span class="hl num">128</span><span class="hl opt">)</span>
+              a <span class="hl str">&quot;ACBDGHK</span><span class="hl esc">\n</span><span class="hl str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>
+              b <span class="hl str">&quot;TGVHCDM</span><span class="hl esc">\n</span><span class="hl str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span>
+              c <span class="hl opt">(</span>.length a<span class="hl opt">)]</span>
+          <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+            <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i c<span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">aset</span> bs <span class="hl opt">(</span>.charAt a i<span class="hl opt">) (</span><span class="hl kwa">byte</span> <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl opt">(</span>.charAt b i<span class="hl opt">))))</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">))))</span>
+          bs<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> inner ^long <span class="hl opt">[</span>^long i ^long len ^bytes buf<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>bs ^bytes bs<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i len<span class="hl opt">)</span>
+      <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>b <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> buf i<span class="hl opt">))]</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> b <span class="hl opt">(</span><span class="hl kwa">int</span> <span class="hl num">62</span><span class="hl opt">))</span>  <span class="hl slc">;; &gt;</span>
+          <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">do</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> buf i <span class="hl opt">(</span><span class="hl kwa">aget</span> bs b<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> len buf<span class="hl opt">))))</span>
+      i<span class="hl opt">)))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> reverse-task <span class="hl opt">[</span>^bytes buf ^long begin ^long end<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[]</span>
+    <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>buf ^bytes buf<span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>begin begin
+             end end<span class="hl opt">]</span>
+        <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> begin end<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>bb <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> buf begin<span class="hl opt">))]</span>
+            <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> bb <span class="hl num">10</span><span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> begin<span class="hl opt">)</span> end<span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>be <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> buf end<span class="hl opt">))]</span>
+                <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> be <span class="hl num">10</span><span class="hl opt">)</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> begin <span class="hl opt">(</span><span class="hl kwa">dec</span> end<span class="hl opt">))</span>
+                  <span class="hl opt">(</span><span class="hl kwa">do</span>
+                    <span class="hl opt">(</span><span class="hl kwa">aset</span> buf begin <span class="hl opt">(</span><span class="hl kwa">byte</span> be<span class="hl opt">))</span>
+                    <span class="hl opt">(</span><span class="hl kwa">aset</span> buf end <span class="hl opt">(</span><span class="hl kwa">byte</span> bb<span class="hl opt">))</span>
+                    <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> begin<span class="hl opt">) (</span><span class="hl kwa">dec</span> end<span class="hl opt">))))))))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> -main <span class="hl opt">[&amp;</span> args<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>pool <span class="hl opt">(</span><span class="hl kwa">ForkJoinPool</span><span class="hl opt">/</span>commonPool<span class="hl opt">)</span>
+        len <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span>.available System<span class="hl opt">/</span>in<span class="hl opt">))</span>
+        buf <span class="hl opt">(</span><span class="hl kwa">byte-array</span> len<span class="hl opt">)]</span>
+    <span class="hl opt">(</span>.read System<span class="hl opt">/</span>in buf<span class="hl opt">)</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+           tasks <span class="hl opt">[]]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i len<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>b <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> buf i<span class="hl opt">))]</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> b <span class="hl num">10</span><span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>j <span class="hl opt">(</span><span class="hl kwa">inner</span> i len buf<span class="hl opt">)</span>
+                  end <span class="hl opt">(</span><span class="hl kwa">-</span> j <span class="hl num">2</span><span class="hl opt">)</span>
+                  task <span class="hl opt">(</span><span class="hl kwa">ForkJoinTask</span><span class="hl opt">/</span>adapt <span class="hl opt">(</span><span class="hl kwa">reverse-task</span> buf i end<span class="hl opt">)</span> end<span class="hl opt">)]</span>
+              <span class="hl opt">(</span>.execute pool task<span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">) (</span><span class="hl kwa">conj</span> tasks task<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> tasks<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+               last <span class="hl num">0</span><span class="hl opt">]</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i <span class="hl opt">(</span><span class="hl kwa">count</span> tasks<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>t ^ForkJoinTask <span class="hl opt">(</span><span class="hl kwa">nth</span> tasks i<span class="hl opt">)</span>
+                  r <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span>.join t<span class="hl opt">))]</span>
+              <span class="hl opt">(</span>.write System<span class="hl opt">/</span>out buf last <span class="hl opt">(</span><span class="hl kwa">-</span> r last<span class="hl opt">))</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> r<span class="hl opt">))</span>
+            <span class="hl opt">(</span>.write System<span class="hl opt">/</span>out buf last <span class="hl opt">(</span><span class="hl kwa">-</span> len last<span class="hl opt">))))))))</span>

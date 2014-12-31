@@ -1,0 +1,304 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by TeXitoi </span>
+
+<span class="hl slc">// no-pretty-expanded FIXME #15189</span>
+
+<span class="hl ppc">#![feature(phase)]</span>
+<span class="hl ppc">#[phase(plugin)] extern crate green;</span>
+
+use std<span class="hl opt">::</span>sync<span class="hl opt">::</span>Arc<span class="hl opt">;</span>
+
+green_start<span class="hl opt">!(</span>main<span class="hl opt">)</span>
+
+<span class="hl slc">//</span>
+<span class="hl slc">// Utilities.</span>
+<span class="hl slc">//</span>
+
+<span class="hl slc">// returns an infinite iterator of repeated applications of f to x,</span>
+<span class="hl slc">// i.e. [x, f(x), f(f(x)), ...], as haskell iterate function.</span>
+fn iterate<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt;(x: T, f: |&amp;T|: '</span>a <span class="hl opt">-&gt;</span> T<span class="hl opt">) -&gt;</span> Iterate<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt; {</span>
+<span class="hl str">    Iterate {f: f, next: x}</span>
+<span class="hl str">}</span>
+<span class="hl str">struct Iterate&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt; {</span>
+    f<span class="hl opt">: |&amp;</span>T<span class="hl opt">|:</span> <span class="hl str">'a -&gt; T,</span>
+<span class="hl str">    next: T</span>
+<span class="hl str">}</span>
+<span class="hl str">impl&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt;</span> Iterator<span class="hl opt">&lt;</span>T<span class="hl opt">&gt;</span> <span class="hl kwa">for</span> Iterate<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt; {</span>
+<span class="hl str">    fn next(&amp;mut self) -&gt; Option&lt;T&gt; {</span>
+<span class="hl str">        let mut res = (self.f)(&amp;self.next);</span>
+<span class="hl str">        std::mem::swap(&amp;mut res, &amp;mut self.next);</span>
+<span class="hl str">        Some(res)</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// a linked list using borrowed next.</span>
+<span class="hl str">enum List&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt; {</span>
+    Nil<span class="hl opt">,</span>
+    <span class="hl kwd">Cons</span><span class="hl opt">(</span>T<span class="hl opt">, &amp;</span><span class="hl str">'a List&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt;)</span>
+<span class="hl opt">}</span>
+<span class="hl kwb">struct</span> ListIterator<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt; {</span>
+<span class="hl str">    cur: &amp;'</span>a List<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt;</span>
+<span class="hl str">}</span>
+<span class="hl str">impl&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt;</span> List<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt; {</span>
+<span class="hl str">    fn iter(&amp;'</span>a self<span class="hl opt">) -&gt;</span> ListIterator<span class="hl opt">&lt;</span><span class="hl str">'a, T&gt; {</span>
+<span class="hl str">        ListIterator{cur: self}</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str">impl&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt;</span> Iterator<span class="hl opt">&lt;&amp;</span><span class="hl str">'a T&gt; for ListIterator&lt;'</span>a<span class="hl opt">,</span> T<span class="hl opt">&gt; {</span>
+    fn <span class="hl kwd">next</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) -&gt;</span> Option<span class="hl opt">&lt;&amp;</span><span class="hl str">'a T&gt; {</span>
+<span class="hl str">        match *self.cur {</span>
+<span class="hl str">            Nil =&gt; None,</span>
+<span class="hl str">            Cons(ref elt, next) =&gt; {</span>
+<span class="hl str">                self.cur = next;</span>
+<span class="hl str">                Some(elt)</span>
+<span class="hl str">            }</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">//</span>
+<span class="hl str">// preprocess</span>
+<span class="hl str">//</span>
+<span class="hl str"></span>
+<span class="hl str">// Takes a pieces p on the form [(y1, x1), (y2, x2), ...] and returns</span>
+<span class="hl str">// every possible transformations (the 6 rotations with their</span>
+<span class="hl str">// corresponding mirrored piece), with, as minimum coordinates, (0,</span>
+<span class="hl str">// 0).  If all is false, only generate half of the possibilities (used</span>
+<span class="hl str">// to break the symetry of the board).</span>
+<span class="hl str">fn transform(piece: Vec&lt;(int, int)&gt; , all: bool) -&gt; Vec&lt;Vec&lt;(int, int)&gt;&gt; {</span>
+<span class="hl str">    let mut res: Vec&lt;Vec&lt;(int, int)&gt;&gt; =</span>
+<span class="hl str">        // rotations</span>
+<span class="hl str">        iterate(piece, |rot| rot.iter().map(|&amp;(y, x)| (x + y, -y)).collect())</span>
+<span class="hl str">        .take(if all {6} else {3})</span>
+<span class="hl str">        // mirror</span>
+<span class="hl str">        .flat_map(|cur_piece| {</span>
+<span class="hl str">            iterate(cur_piece, |mir| mir.iter().map(|&amp;(y, x)| (x, y)).collect())</span>
+<span class="hl str">            .take(2)</span>
+<span class="hl str">        }).collect();</span>
+<span class="hl str"></span>
+<span class="hl str">    // translating to (0, 0) as minimum coordinates.</span>
+<span class="hl str">    for cur_piece in res.mut_iter() {</span>
+<span class="hl str">        let (dy, dx) = *cur_piece.iter().min_by(|e| *e).unwrap();</span>
+<span class="hl str">        for &amp;(ref mut y, ref mut x) in cur_piece.mut_iter() {</span>
+<span class="hl str">            *y -= dy; *x -= dx;</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    res</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// A mask is a piece somewere on the board.  It is represented as a</span>
+<span class="hl str">// u64: for i in the first 50 bits, m[i] = 1 if the cell at (i/5, i%5)</span>
+<span class="hl str">// is occuped.  m[50 + id] = 1 if the identifier of the piece is id.</span>
+<span class="hl str"></span>
+<span class="hl str">// Takes a piece with minimum coordinate (0, 0) (as generated by</span>
+<span class="hl str">// transform).  Returns the corresponding mask if p translated by (dy,</span>
+<span class="hl str">// dx) is on the board.</span>
+<span class="hl str">fn mask(dy: int, dx: int, id: uint, p: &amp;Vec&lt;(int, int)&gt;) -&gt; Option&lt;u64&gt; {</span>
+<span class="hl str">    let mut m = 1 &lt;&lt; (50 + id);</span>
+<span class="hl str">    for &amp;(y, x) in p.iter() {</span>
+<span class="hl str">        let x = x + dx + (y + (dy % 2)) / 2;</span>
+<span class="hl str">        if x &lt; 0 || x &gt; 4 {return None;}</span>
+<span class="hl str">        let y = y + dy;</span>
+<span class="hl str">        if y &lt; 0 || y &gt; 9 {return None;}</span>
+<span class="hl str">        m |= 1 &lt;&lt; (y * 5 + x) as uint;</span>
+<span class="hl str">    }</span>
+<span class="hl str">    Some(m)</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Makes every possible masks.  masks[i][id] correspond to every</span>
+<span class="hl str">// possible masks for piece with identifier id with minimum coordinate</span>
+<span class="hl str">// (i/5, i%5).</span>
+<span class="hl str">fn make_masks() -&gt; Vec&lt;Vec&lt;Vec&lt;u64&gt; &gt; &gt; {</span>
+<span class="hl str">    let pieces = vec!(</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(0,3),(1,3)),</span>
+<span class="hl str">        vec!((0i,0i),(0,2),(0,3),(1,0),(1,1)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(1,2),(2,1)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(1,1),(2,1)),</span>
+<span class="hl str">        vec!((0i,0i),(0,2),(1,0),(1,1),(2,1)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(1,1),(1,2)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(1,1),(1,2),(2,1)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(1,0),(1,2)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(1,2),(1,3)),</span>
+<span class="hl str">        vec!((0i,0i),(0,1),(0,2),(0,3),(1,2)));</span>
+<span class="hl str"></span>
+<span class="hl str">    // To break the central symetry of the problem, every</span>
+<span class="hl str">    // transformation must be taken except for one piece (piece 3</span>
+<span class="hl str">    // here).</span>
+<span class="hl str">    let transforms: Vec&lt;Vec&lt;Vec&lt;(int, int)&gt;&gt;&gt; =</span>
+<span class="hl str">        pieces.move_iter().enumerate()</span>
+<span class="hl str">        .map(|(id, p)| transform(p, id != 3))</span>
+<span class="hl str">        .collect();</span>
+<span class="hl str"></span>
+<span class="hl str">    range(0i, 50).map(|yx| {</span>
+<span class="hl str">        transforms.iter().enumerate().map(|(id, t)| {</span>
+<span class="hl str">            t.iter().filter_map(|p| mask(yx / 5, yx % 5, id, p)).collect()</span>
+<span class="hl str">        }).collect()</span>
+<span class="hl str">    }).collect()</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Check if all coordinates can be covered by an unused piece and that</span>
+<span class="hl str">// all unused piece can be placed on the board.</span>
+<span class="hl str">fn is_board_unfeasible(board: u64, masks: &amp;Vec&lt;Vec&lt;Vec&lt;u64&gt;&gt;&gt;) -&gt; bool {</span>
+<span class="hl str">    let mut coverable = board;</span>
+<span class="hl str">    for (i, masks_at) in masks.iter().enumerate() {</span>
+<span class="hl str">        if board &amp; 1 &lt;&lt; i != 0 { continue; }</span>
+<span class="hl str">        for (cur_id, pos_masks) in masks_at.iter().enumerate() {</span>
+<span class="hl str">            if board &amp; 1 &lt;&lt; (50 + cur_id) != 0 { continue; }</span>
+<span class="hl str">            for &amp;cur_m in pos_masks.iter() {</span>
+<span class="hl str">                if cur_m &amp; board != 0 { continue; }</span>
+<span class="hl str">                coverable |= cur_m;</span>
+<span class="hl str">                // if every coordinates can be covered and every</span>
+<span class="hl str">                // piece can be used.</span>
+<span class="hl str">                if coverable == (1 &lt;&lt; 60) - 1 { return false; }</span>
+<span class="hl str">            }</span>
+<span class="hl str">        }</span>
+<span class="hl str">        if coverable &amp; 1 &lt;&lt; i == 0 { return true; }</span>
+<span class="hl str">    }</span>
+<span class="hl str">    true</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Filter the masks that we can prove to result to unfeasible board.</span>
+<span class="hl str">fn filter_masks(masks: &amp;mut Vec&lt;Vec&lt;Vec&lt;u64&gt;&gt;&gt;) {</span>
+<span class="hl str">    for i in range(0, masks.len()) {</span>
+<span class="hl str">        for j in range(0, masks.get(i).len()) {</span>
+<span class="hl str">            *masks.get_mut(i).get_mut(j) =</span>
+<span class="hl str">                masks.get(i).get(j).iter().map(|&amp;m| m)</span>
+<span class="hl str">                .filter(|&amp;m| !is_board_unfeasible(m, masks))</span>
+<span class="hl str">                .collect();</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Gets the identifier of a mask.</span>
+<span class="hl str">fn get_id(m: u64) -&gt; u8 {</span>
+<span class="hl str">    for id in range(0u8, 10) {</span>
+<span class="hl str">        if m &amp; (1 &lt;&lt; (id + 50) as uint) != 0 {return id;}</span>
+<span class="hl str">    }</span>
+<span class="hl str">    fail!(&quot;{:016x} does not have a valid identifier&quot;, m);</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Converts a list of mask to a Vec&lt;u8&gt;.</span>
+<span class="hl str">fn to_vec(raw_sol: &amp;List&lt;u64&gt;) -&gt; Vec&lt;u8&gt; {</span>
+<span class="hl str">    let mut sol = Vec::from_elem(50, '</span><span class="hl opt">.</span><span class="hl str">' as u8);</span>
+<span class="hl str">    for &amp;m in raw_sol.iter() {</span>
+<span class="hl str">        let id = '</span><span class="hl num">0</span><span class="hl str">' as u8 + get_id(m);</span>
+<span class="hl str">        for i in range(0u, 50) {</span>
+<span class="hl str">            if m &amp; 1 &lt;&lt; i != 0 {</span>
+<span class="hl str">                *sol.get_mut(i) = id;</span>
+<span class="hl str">            }</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">    sol</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Prints a solution in Vec&lt;u8&gt; form.</span>
+<span class="hl str">fn print_sol(sol: &amp;Vec&lt;u8&gt;) {</span>
+<span class="hl str">    for (i, c) in sol.iter().enumerate() {</span>
+<span class="hl str">        if (i) % 5 == 0 { println!(&quot;&quot;); }</span>
+<span class="hl str">        if (i + 5) % 10 == 0 { print!(&quot; &quot;); }</span>
+<span class="hl str">        print!(&quot;{} &quot;, *c as char);</span>
+<span class="hl str">    }</span>
+<span class="hl str">    println!(&quot;&quot;);</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// The data managed during the search</span>
+<span class="hl str">struct Data {</span>
+<span class="hl str">    // Number of solution found.</span>
+<span class="hl str">    nb: int,</span>
+<span class="hl str">    // Lexicographically minimal solution found.</span>
+<span class="hl str">    min: Vec&lt;u8&gt;,</span>
+<span class="hl str">    // Lexicographically maximal solution found.</span>
+<span class="hl str">    max: Vec&lt;u8&gt;</span>
+<span class="hl str">}</span>
+<span class="hl str">impl Data {</span>
+<span class="hl str">    fn new() -&gt; Data {</span>
+<span class="hl str">        Data {nb: 0, min: vec!(), max: vec!()}</span>
+<span class="hl str">    }</span>
+<span class="hl str">    fn reduce_from(&amp;mut self, other: Data) {</span>
+<span class="hl str">        self.nb += other.nb;</span>
+<span class="hl str">        let Data { min: min, max: max, ..} = other;</span>
+<span class="hl str">        if min &lt; self.min { self.min = min; }</span>
+<span class="hl str">        if max &gt; self.max { self.max = max; }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">// Records a new found solution.  Returns false if the search must be</span>
+<span class="hl str">// stopped.</span>
+<span class="hl str">fn handle_sol(raw_sol: &amp;List&lt;u64&gt;, data: &amp;mut Data) {</span>
+<span class="hl str">    // because we break the symetry, 2 solutions correspond to a call</span>
+<span class="hl str">    // to this method: the normal solution, and the same solution in</span>
+<span class="hl str">    // reverse order, i.e. the board rotated by half a turn.</span>
+<span class="hl str">    data.nb += 2;</span>
+<span class="hl str">    let sol1 = to_vec(raw_sol);</span>
+<span class="hl str">    let sol2: Vec&lt;u8&gt; = sol1.iter().rev().map(|x| *x).collect();</span>
+<span class="hl str"></span>
+<span class="hl str">    if data.nb == 2 {</span>
+<span class="hl str">        data.min = sol1.clone();</span>
+<span class="hl str">        data.max = sol1.clone();</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    if sol1 &lt; data.min {data.min = sol1;}</span>
+<span class="hl str">    else if sol1 &gt; data.max {data.max = sol1;}</span>
+<span class="hl str">    if sol2 &lt; data.min {data.min = sol2;}</span>
+<span class="hl str">    else if sol2 &gt; data.max {data.max = sol2;}</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn search(</span>
+<span class="hl str">    masks: &amp;Vec&lt;Vec&lt;Vec&lt;u64&gt;&gt;&gt;,</span>
+<span class="hl str">    board: u64,</span>
+<span class="hl str">    mut i: uint,</span>
+<span class="hl str">    cur: List&lt;u64&gt;,</span>
+<span class="hl str">    data: &amp;mut Data)</span>
+<span class="hl str">{</span>
+<span class="hl str">    // Search for the lesser empty coordinate.</span>
+<span class="hl str">    while board &amp; (1 &lt;&lt; i)  != 0 &amp;&amp; i &lt; 50 {i += 1;}</span>
+<span class="hl str">    // the board is full: a solution is found.</span>
+<span class="hl str">    if i &gt;= 50 {return handle_sol(&amp;cur, data);}</span>
+<span class="hl str">    let masks_at = masks.get(i);</span>
+<span class="hl str"></span>
+<span class="hl str">    // for every unused piece</span>
+<span class="hl str">    for id in range(0u, 10).filter(|id| board &amp; (1 &lt;&lt; (id + 50)) == 0) {</span>
+<span class="hl str">        // for each mask that fits on the board</span>
+<span class="hl str">        for &amp;m in masks_at.get(id).iter().filter(|&amp;m| board &amp; *m == 0) {</span>
+<span class="hl str">            // This check is too costy.</span>
+<span class="hl str">            //if is_board_unfeasible(board | m, masks) {continue;}</span>
+<span class="hl str">            search(masks, board | m, i + 1, Cons(m, &amp;cur), data);</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn par_search(masks: Vec&lt;Vec&lt;Vec&lt;u64&gt;&gt;&gt;) -&gt; Data {</span>
+<span class="hl str">    let masks = Arc::new(masks);</span>
+<span class="hl str">    let (tx, rx) = channel();</span>
+<span class="hl str"></span>
+<span class="hl str">    // launching the search in parallel on every masks at minimum</span>
+<span class="hl str">    // coordinate (0,0)</span>
+<span class="hl str">    for &amp;m in masks.get(0).iter().flat_map(|masks_pos| masks_pos.iter()) {</span>
+<span class="hl str">        let masks = masks.clone();</span>
+<span class="hl str">        let tx = tx.clone();</span>
+<span class="hl str">        spawn(proc() {</span>
+<span class="hl str">            let mut data = Data::new();</span>
+<span class="hl str">            search(&amp;*masks, m, 1, Cons(m, &amp;Nil), &amp;mut data);</span>
+<span class="hl str">            tx.send(data);</span>
+<span class="hl str">        });</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    // collecting the results</span>
+<span class="hl str">    drop(tx);</span>
+<span class="hl str">    let mut data = rx.recv();</span>
+<span class="hl str">    for d in rx.iter() { data.reduce_from(d); }</span>
+<span class="hl str">    data</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn main () {</span>
+<span class="hl str">    let mut masks = make_masks();</span>
+<span class="hl str">    filter_masks(&amp;mut masks);</span>
+<span class="hl str">    let data = par_search(masks);</span>
+<span class="hl str">    println!(&quot;{} solutions found&quot;, data.nb);</span>
+<span class="hl str">    print_sol(&amp;data.min);</span>
+<span class="hl str">    print_sol(&amp;data.max);</span>
+<span class="hl str">    println!(&quot;&quot;);</span>
+<span class="hl str">}</span>

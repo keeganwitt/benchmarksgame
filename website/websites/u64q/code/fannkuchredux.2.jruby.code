@@ -1,0 +1,217 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc"># Contributed by Wesley Moxam</span>
+<span class="hl slc"># Modified by Sokolov Yura aka funny_falcon</span>
+<span class="hl slc"># Parallelised by Scott Leggett</span>
+
+<span class="hl kwa">module</span> MiniParallel
+    <span class="hl kwa">class</span> Worker
+        <span class="hl kwa">def</span> <span class="hl kwd">initialize</span><span class="hl opt">(</span>read<span class="hl opt">,</span> write)
+            <span class="hl kwb">&#64;read</span><span class="hl opt">,</span> <span class="hl kwb">&#64;write</span> <span class="hl opt">=</span> read<span class="hl opt">,</span> write
+        <span class="hl kwa">end</span>
+
+        <span class="hl kwa">def</span> close_pipes
+            <span class="hl kwb">&#64;read</span><span class="hl opt">.</span>close
+            <span class="hl kwb">&#64;write</span><span class="hl opt">.</span>close
+        <span class="hl kwa">end</span>
+
+        <span class="hl kwa">def</span> <span class="hl kwd">work</span><span class="hl opt">(</span>index)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">dump</span><span class="hl opt">(</span>index<span class="hl opt">,</span> <span class="hl kwb">&#64;write</span>)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">load</span><span class="hl opt">(</span><span class="hl kwb">&#64;read</span>)
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>array<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwd">work_in_processes</span><span class="hl opt">(</span>
+            array<span class="hl opt">,</span>
+            <span class="hl opt">[</span>array<span class="hl opt">.</span>size<span class="hl opt">,</span> core_count<span class="hl opt">].</span>min<span class="hl opt">,</span>
+            <span class="hl opt">&amp;</span>block
+        )
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span>core_count
+        &#64;<span class="hl kwb">&#64;core_count</span> <span class="hl opt">||=</span> IO<span class="hl opt">.</span><span class="hl kwd">read</span><span class="hl opt">(</span><span class="hl str">&quot;/proc/cpuinfo&quot;</span>)<span class="hl opt">.</span><span class="hl kwd">scan</span><span class="hl opt">(</span><span class="hl kwc">/^processor/</span>)<span class="hl opt">.</span>size
+    <span class="hl kwa">end</span>
+
+    private
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">work_in_processes</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+        index <span class="hl opt">= -</span><span class="hl num">1</span>
+        results<span class="hl opt">,</span> threads <span class="hl opt">= [], []</span>
+
+        workers <span class="hl opt">=</span> <span class="hl kwd">create_workers</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+
+        workers<span class="hl opt">.</span>each <span class="hl kwa">do</span> <span class="hl opt">|</span>worker<span class="hl opt">|</span>
+            threads <span class="hl opt">&lt;&lt;</span> Thread<span class="hl opt">.</span>new <span class="hl kwa">do</span>
+                <span class="hl kwa">loop do</span>
+                    Thread<span class="hl opt">.</span>exclusive<span class="hl esc">{ index += 1 }</span>
+                    <span class="hl kwa">break if</span> index <span class="hl opt">&gt;=</span> array<span class="hl opt">.</span>size
+                    results<span class="hl opt">[</span>index<span class="hl opt">] =</span> worker<span class="hl opt">.</span><span class="hl kwd">work</span><span class="hl opt">(</span>index)
+                <span class="hl kwa">end</span>
+                worker<span class="hl opt">.</span>close_pipes
+            <span class="hl kwa">end</span>
+        <span class="hl kwa">end</span>
+
+        threads<span class="hl opt">.</span><span class="hl kwd">each</span><span class="hl opt">(&amp;</span><span class="hl kwc">:join</span>)
+        Process<span class="hl opt">.</span>waitall
+
+        results
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">create_workers</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+        workers <span class="hl opt">= []</span>
+        count<span class="hl opt">.</span>times <span class="hl kwa">do</span>
+            workers <span class="hl opt">&lt;&lt;</span> <span class="hl kwd">create_worker</span><span class="hl opt">(</span>array<span class="hl opt">,</span> workers<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwa">end</span>
+        workers
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">create_worker</span><span class="hl opt">(</span>array<span class="hl opt">,</span> started_workers<span class="hl opt">, &amp;</span>block)
+        child_read<span class="hl opt">,</span> parent_write <span class="hl opt">=</span> IO<span class="hl opt">.</span>pipe
+        parent_read<span class="hl opt">,</span> child_write <span class="hl opt">=</span> IO<span class="hl opt">.</span>pipe
+
+        Process<span class="hl opt">.</span>fork <span class="hl kwa">do</span>
+            started_workers<span class="hl opt">.</span><span class="hl kwd">each</span><span class="hl opt">(&amp;</span><span class="hl kwc">:close_pipes</span>)
+
+            parent_write<span class="hl opt">.</span>close
+            parent_read<span class="hl opt">.</span>close
+
+            <span class="hl kwd">process_incoming_jobs</span><span class="hl opt">(</span>child_read<span class="hl opt">,</span> child_write<span class="hl opt">,</span> array<span class="hl opt">, &amp;</span>block)
+
+            child_read<span class="hl opt">.</span>close
+            child_write<span class="hl opt">.</span>close
+        <span class="hl kwa">end</span>
+
+        child_read<span class="hl opt">.</span>close
+        child_write<span class="hl opt">.</span>close
+
+        Worker<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>parent_read<span class="hl opt">,</span> parent_write)
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">process_incoming_jobs</span><span class="hl opt">(</span>read<span class="hl opt">,</span> write<span class="hl opt">,</span> array<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwa">until</span> read<span class="hl opt">.</span>eof<span class="hl opt">?</span>
+            index <span class="hl opt">=</span> Marshal<span class="hl opt">.</span><span class="hl kwd">load</span><span class="hl opt">(</span>read)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">dump</span><span class="hl opt">(</span>block<span class="hl opt">.</span><span class="hl kwd">call</span><span class="hl opt">(</span>array<span class="hl opt">[</span>index<span class="hl opt">]</span>)<span class="hl opt">,</span> write)
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">class</span> Fannkuch
+
+    <span class="hl kwa">def</span> <span class="hl kwd">initialize</span><span class="hl opt">(</span>n<span class="hl opt">,</span> start<span class="hl opt">,</span> max_perms)
+        <span class="hl kwb">&#64;n</span> <span class="hl opt">=</span> n
+        <span class="hl kwb">&#64;p</span> <span class="hl opt">= (</span><span class="hl num">0</span><span class="hl opt">..</span>n)<span class="hl opt">.</span>to_a
+        <span class="hl kwb">&#64;s</span> <span class="hl opt">=</span> <span class="hl kwb">&#64;p</span><span class="hl opt">.</span>dup
+        <span class="hl kwb">&#64;q</span> <span class="hl opt">=</span> <span class="hl kwb">&#64;p</span><span class="hl opt">.</span>dup
+        <span class="hl kwb">&#64;sign</span> <span class="hl opt">=</span> <span class="hl num">1</span>
+        <span class="hl kwb">&#64;sum</span> <span class="hl opt">=</span> <span class="hl kwb">&#64;maxflips</span> <span class="hl opt">=</span> <span class="hl num">0</span>
+        <span class="hl kwb">&#64;max_perms</span> <span class="hl opt">=</span> max_perms
+        <span class="hl kwb">&#64;perm_count</span> <span class="hl opt">= -</span>start
+        start<span class="hl opt">.</span>times<span class="hl esc">{permute}</span>
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def</span> flip
+        <span class="hl kwa">loop do</span>
+            <span class="hl kwa">if</span> <span class="hl kwb">&#64;perm_count</span> <span class="hl opt">==</span> <span class="hl kwb">&#64;max_perms</span>
+                <span class="hl kwa">return</span> <span class="hl opt">[</span><span class="hl kwb">&#64;sum</span><span class="hl opt">,</span> <span class="hl kwb">&#64;maxflips</span><span class="hl opt">]</span>
+            <span class="hl kwa">end</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>q1 <span class="hl opt">=</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]</span>) <span class="hl opt">!=</span> <span class="hl num">1</span>
+                <span class="hl kwb">&#64;q</span><span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">..-</span><span class="hl num">1</span><span class="hl opt">] =</span> <span class="hl kwb">&#64;p</span>
+                flips <span class="hl opt">=</span> <span class="hl num">1</span>
+                <span class="hl kwa">until</span> <span class="hl opt">(</span>qq <span class="hl opt">=</span> <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>q1<span class="hl opt">]</span>) <span class="hl opt">==</span> <span class="hl num">1</span>
+                    <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>q1<span class="hl opt">] =</span> q1
+                    <span class="hl kwa">if</span> q1 <span class="hl opt">&gt;=</span> <span class="hl num">4</span>
+                        i<span class="hl opt">,</span> j <span class="hl opt">=</span> <span class="hl num">2</span><span class="hl opt">,</span> q1 <span class="hl opt">-</span> <span class="hl num">1</span>
+                        <span class="hl kwa">while</span> i <span class="hl opt">&lt;</span> j
+                            <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>i<span class="hl opt">],</span> <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>j<span class="hl opt">] =</span> <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>j<span class="hl opt">],</span> <span class="hl kwb">&#64;q</span><span class="hl opt">[</span>i<span class="hl opt">]</span>
+                            i <span class="hl opt">+=</span> <span class="hl num">1</span>
+                            j <span class="hl opt">-=</span> <span class="hl num">1</span>
+                        <span class="hl kwa">end</span>
+                    <span class="hl kwa">end</span>
+                    q1 <span class="hl opt">=</span> qq
+                    flips <span class="hl opt">+=</span> <span class="hl num">1</span>
+                <span class="hl kwa">end</span>
+                <span class="hl kwb">&#64;sum</span> <span class="hl opt">+=</span> <span class="hl kwb">&#64;sign</span> <span class="hl opt">*</span> flips
+                <span class="hl kwb">&#64;maxflips</span> <span class="hl opt">=</span> flips <span class="hl kwa">if</span> flips <span class="hl opt">&gt;</span> <span class="hl kwb">&#64;maxflips</span> <span class="hl slc"># New maximum?</span>
+            <span class="hl kwa">end</span>
+            permute
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def</span> permute
+        <span class="hl kwb">&#64;perm_count</span> <span class="hl opt">+=</span> <span class="hl num">1</span>
+
+        <span class="hl kwa">if</span> <span class="hl kwb">&#64;sign</span> <span class="hl opt">==</span> <span class="hl num">1</span>
+            <span class="hl slc"># Rotate 1&lt;-2.</span>
+
+            <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">],</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">] =</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">],</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]</span>
+            <span class="hl kwb">&#64;sign</span> <span class="hl opt">= -</span><span class="hl num">1</span>
+        <span class="hl kwa">else</span>
+            <span class="hl slc"># Rotate 1&lt;-2 and 1&lt;-2&lt;-3.</span>
+
+            <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">],</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">3</span><span class="hl opt">] =</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">3</span><span class="hl opt">],</span> <span class="hl kwb">&#64;p</span><span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">]</span>
+            <span class="hl kwb">&#64;sign</span> <span class="hl opt">=</span> <span class="hl num">1</span>
+            i <span class="hl opt">=</span> <span class="hl num">3</span>
+            <span class="hl kwa">while</span> i <span class="hl opt">&lt;=</span> <span class="hl kwb">&#64;n</span> <span class="hl opt">&amp;&amp;</span> <span class="hl kwb">&#64;s</span><span class="hl opt">[</span>i<span class="hl opt">] ==</span> <span class="hl num">1</span>
+                <span class="hl kwb">&#64;s</span><span class="hl opt">[</span>i<span class="hl opt">] =</span> i
+                <span class="hl slc"># Rotate 1&lt;-...&lt;-i+1.</span>
+
+                t <span class="hl opt">=</span> <span class="hl kwb">&#64;p</span><span class="hl opt">.</span><span class="hl kwd">delete_at</span><span class="hl opt">(</span><span class="hl num">1</span>)
+                i <span class="hl opt">+=</span> <span class="hl num">1</span>
+                <span class="hl kwb">&#64;p</span><span class="hl opt">.</span><span class="hl kwd">insert</span><span class="hl opt">(</span>i<span class="hl opt">,</span> t)
+            <span class="hl kwa">end</span>
+            <span class="hl kwb">&#64;s</span><span class="hl opt">[</span>i<span class="hl opt">] -=</span> <span class="hl num">1</span>  <span class="hl kwa">if</span> i <span class="hl opt">&lt;=</span> <span class="hl kwb">&#64;n</span>
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+abort <span class="hl str">&quot;Usage:</span> <span class="hl esc">#{__FILE__}</span> <span class="hl str">n\n(n &gt; 6)&quot;</span> <span class="hl kwa">if</span> <span class="hl opt">(</span>n <span class="hl opt">=</span> <span class="hl kwc">ARGV</span><span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">].</span>to_i) <span class="hl opt">&lt;</span> <span class="hl num">6</span>
+
+core_count <span class="hl opt">=</span> MiniParallel<span class="hl opt">.</span>core_count
+chunk_size <span class="hl opt">= (</span><span class="hl num">1</span><span class="hl opt">..</span>n)<span class="hl opt">.</span><span class="hl kwd">reduce</span><span class="hl opt">(:*</span>) <span class="hl opt">/</span> core_count
+
+sum<span class="hl opt">,</span> flips <span class="hl opt">=</span>
+    <span class="hl kwa">if</span> core_count <span class="hl opt">&gt;</span> <span class="hl num">1</span>
+        <span class="hl slc"># adjust job sizes to even out workload</span>
+        weights <span class="hl opt">=</span> <span class="hl kwa">if</span> core_count <span class="hl opt">&gt;</span> <span class="hl num">1</span>
+                      weights <span class="hl opt">= []</span>
+                      <span class="hl opt">(</span>core_count<span class="hl opt">/</span><span class="hl num">2</span>)<span class="hl opt">.</span>times <span class="hl kwa">do</span> <span class="hl opt">|</span>i<span class="hl opt">|</span>
+                          weights <span class="hl opt">&lt;&lt;</span> i <span class="hl opt">*</span> <span class="hl num">0.1</span> <span class="hl opt">+</span> <span class="hl num">0.05</span>
+                      <span class="hl kwa">end</span>
+                      weights <span class="hl opt">=</span> weights<span class="hl opt">.</span>reverse <span class="hl opt">+</span> weights<span class="hl opt">.</span>map<span class="hl esc">{|i|-i}</span>
+                  <span class="hl kwa">else</span>
+                      <span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">]</span>
+                  <span class="hl kwa">end</span>
+
+        <span class="hl slc"># Generate start position for each chunk</span>
+        chunks <span class="hl opt">=</span> core_count<span class="hl opt">.</span>times<span class="hl opt">.</span><span class="hl kwd">zip</span><span class="hl opt">(</span>weights)<span class="hl opt">.</span>map <span class="hl kwa">do</span> <span class="hl opt">|</span>count<span class="hl opt">,</span> weight<span class="hl opt">|</span>
+            <span class="hl opt">[</span>count <span class="hl opt">*</span> chunk_size <span class="hl opt">+</span>
+             <span class="hl opt">(</span>count <span class="hl opt">&gt;</span> <span class="hl num">0</span> <span class="hl opt">? (</span>weights<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">,</span>count<span class="hl opt">].</span><span class="hl kwd">reduce</span><span class="hl opt">(:+</span>) <span class="hl opt">*</span> chunk_size)<span class="hl opt">.</span>round <span class="hl opt">:</span> <span class="hl num">0</span>)<span class="hl opt">,</span>
+             chunk_size <span class="hl opt">+ (</span>weight <span class="hl opt">*</span> chunk_size)<span class="hl opt">.</span>round<span class="hl opt">]</span>
+        <span class="hl kwa">end</span>
+
+        chunk_results <span class="hl opt">=</span>
+            <span class="hl kwa">if</span> <span class="hl kwc">RUBY_PLATFORM</span> <span class="hl opt">==</span> <span class="hl str">'java'</span>
+                chunk_collector <span class="hl opt">= []</span>
+                threads <span class="hl opt">= []</span>
+                chunks<span class="hl opt">.</span>each<span class="hl opt">.</span>with_index <span class="hl kwa">do</span> <span class="hl opt">|(</span>start<span class="hl opt">,</span>weighted_size)<span class="hl opt">,</span>i<span class="hl opt">|</span>
+                    threads <span class="hl opt">&lt;&lt;</span> Thread<span class="hl opt">.</span>new <span class="hl kwa">do</span>
+                        chunk_collector<span class="hl opt">[</span>i<span class="hl opt">] =</span> Fannkuch<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>n<span class="hl opt">,</span>start<span class="hl opt">,</span>weighted_size)<span class="hl opt">.</span>flip
+                    <span class="hl kwa">end</span>
+                <span class="hl kwa">end</span>
+                threads<span class="hl opt">.</span>all<span class="hl opt">?(&amp;</span><span class="hl kwc">:join</span>)
+                chunk_collector
+            <span class="hl kwa">else</span>
+                MiniParallel<span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>chunks) <span class="hl kwa">do</span> <span class="hl opt">|</span>start<span class="hl opt">,</span> weighted_size<span class="hl opt">|</span>
+                    Fannkuch<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>n<span class="hl opt">,</span>start<span class="hl opt">,</span>weighted_size)<span class="hl opt">.</span>flip
+                <span class="hl kwa">end</span>
+            <span class="hl kwa">end</span>
+
+        chunk_results<span class="hl opt">.</span>reduce <span class="hl kwa">do</span> <span class="hl opt">|</span>memo<span class="hl opt">, (</span>cksum<span class="hl opt">,</span> fmax)<span class="hl opt">|</span>
+            <span class="hl opt">[</span>memo<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">] +</span> cksum<span class="hl opt">, [</span>memo<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">],</span> fmax<span class="hl opt">].</span>max<span class="hl opt">]</span>
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">else</span>
+        Fannkuch<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>n<span class="hl opt">,</span><span class="hl num">0</span><span class="hl opt">,</span>chunk_size)<span class="hl opt">.</span>flip
+    <span class="hl kwa">end</span>
+
+printf <span class="hl str">&quot;%d\nPfannkuchen(%d) = %d\n&quot;</span><span class="hl opt">,</span> sum<span class="hl opt">,</span> n<span class="hl opt">,</span> flips

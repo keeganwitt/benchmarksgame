@@ -1,0 +1,86 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org</span>
+
+<span class="hl slc"># contributed by Aaron Tavistock</span>
+
+<span class="hl slc"># Leverage GMP like all the other languages </span>
+<span class="hl kwa">require</span> <span class="hl str">'gmp'</span>
+
+<span class="hl slc"># Helpers that improve readability</span>
+<span class="hl kwa">class</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span>
+  <span class="hl kwa">def</span> mul<span class="hl opt">!(</span>a<span class="hl opt">,</span>b)
+    GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">.</span><span class="hl kwd">mul</span><span class="hl opt">(</span><span class="hl kwa">self</span><span class="hl opt">,</span> a<span class="hl opt">,</span> b)
+  <span class="hl kwa">end</span>
+
+  <span class="hl kwa">def</span> times<span class="hl opt">!(</span>a)
+    GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">.</span><span class="hl kwd">mul</span><span class="hl opt">(</span><span class="hl kwa">self</span><span class="hl opt">,</span> <span class="hl kwa">self</span><span class="hl opt">,</span> a)
+  <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl slc"># Constants to reduce object instantiation and casting</span>
+ZERO <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+ONE <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">1</span>)
+TWO <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">2</span>)
+THREE <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">3</span>)
+TEN <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">10</span>)
+
+<span class="hl slc"># Allocate these expensive objects once</span>
+<span class="hl kwb">&#64;display_chunk</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+<span class="hl kwb">&#64;k</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+<span class="hl kwb">&#64;a</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+<span class="hl kwb">&#64;t</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+<span class="hl kwb">&#64;u</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+<span class="hl kwb">&#64;k1</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">1</span>)
+<span class="hl kwb">&#64;n</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">1</span>)
+<span class="hl kwb">&#64;d</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">1</span>)
+<span class="hl kwb">&#64;tmp</span> <span class="hl opt">=</span> GMP<span class="hl opt">:</span><span class="hl kwc">:Z</span><span class="hl opt">(</span><span class="hl num">0</span>)
+
+<span class="hl kwa">def</span> next_chunk
+  <span class="hl kwb">&#64;tmp</span><span class="hl opt">.</span>mul<span class="hl opt">!(</span><span class="hl kwb">&#64;d</span><span class="hl opt">,</span> <span class="hl kwb">&#64;t</span>)
+  <span class="hl kwb">&#64;a</span><span class="hl opt">.</span>sub<span class="hl opt">!(</span><span class="hl kwb">&#64;tmp</span>)
+  <span class="hl kwb">&#64;a</span><span class="hl opt">.</span>times<span class="hl opt">!(</span>TEN)
+  <span class="hl kwb">&#64;n</span><span class="hl opt">.</span>times<span class="hl opt">!(</span>TEN)
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> produce_chunk
+  <span class="hl kwb">&#64;k</span><span class="hl opt">.</span>add<span class="hl opt">!(</span>ONE)
+  <span class="hl kwb">&#64;t</span><span class="hl opt">.</span>mul<span class="hl opt">!(</span><span class="hl kwb">&#64;n</span><span class="hl opt">,</span> TWO)
+  <span class="hl kwb">&#64;n</span><span class="hl opt">.</span>times<span class="hl opt">!(</span><span class="hl kwb">&#64;k</span>)
+
+  <span class="hl kwb">&#64;a</span><span class="hl opt">.</span>add<span class="hl opt">!(</span><span class="hl kwb">&#64;t</span>)
+  <span class="hl kwb">&#64;k1</span><span class="hl opt">.</span>add<span class="hl opt">!(</span>TWO)
+  <span class="hl kwb">&#64;a</span><span class="hl opt">.</span>times<span class="hl opt">!(</span><span class="hl kwb">&#64;k1</span>)
+  <span class="hl kwb">&#64;d</span><span class="hl opt">.</span>times<span class="hl opt">!(</span><span class="hl kwb">&#64;k1</span>)
+  
+  <span class="hl kwa">if</span> <span class="hl kwb">&#64;a</span> <span class="hl opt">&gt;=</span> <span class="hl kwb">&#64;n</span>
+    <span class="hl kwb">&#64;tmp</span><span class="hl opt">.</span>mul<span class="hl opt">!(</span><span class="hl kwb">&#64;n</span><span class="hl opt">,</span> THREE)
+    <span class="hl kwb">&#64;tmp</span><span class="hl opt">.</span>add<span class="hl opt">!(</span><span class="hl kwb">&#64;a</span>)
+    <span class="hl kwb">&#64;t</span> <span class="hl opt">=</span> <span class="hl kwb">&#64;tmp</span><span class="hl opt">.</span><span class="hl kwd">fdiv</span><span class="hl opt">(</span><span class="hl kwb">&#64;d</span>)
+    <span class="hl kwb">&#64;u</span> <span class="hl opt">=</span> <span class="hl kwb">&#64;tmp</span><span class="hl opt">.</span><span class="hl kwd">fmod</span><span class="hl opt">(</span><span class="hl kwb">&#64;d</span>)
+    <span class="hl kwb">&#64;u</span><span class="hl opt">.</span>add<span class="hl opt">!(</span><span class="hl kwb">&#64;n</span>)
+    <span class="hl kwa">if</span> <span class="hl kwb">&#64;d</span> <span class="hl opt">&gt;</span> <span class="hl kwb">&#64;u</span>
+      <span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>times<span class="hl opt">!(</span>TEN)
+      <span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>add<span class="hl opt">!(</span><span class="hl kwb">&#64;t</span>)
+      <span class="hl kwa">return true</span>
+    <span class="hl kwa">end</span>
+  <span class="hl kwa">end</span>
+  
+  <span class="hl kwa">false</span>
+<span class="hl kwa">end</span>  
+
+N <span class="hl opt">= (</span><span class="hl kwc">ARGV</span><span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">] ||</span> <span class="hl num">100</span>)<span class="hl opt">.</span>to_i
+count <span class="hl opt">=</span> <span class="hl num">0</span>
+<span class="hl kwa">while</span><span class="hl opt">(</span>count <span class="hl opt">&lt;</span> N) <span class="hl kwa">do</span>
+  <span class="hl kwa">if</span> produce_chunk
+    count <span class="hl opt">+=</span> <span class="hl num">1</span>
+    <span class="hl kwa">if</span> count <span class="hl opt">%</span> <span class="hl num">10</span> <span class="hl opt">==</span> <span class="hl num">0</span>
+      <span class="hl kwc">STDOUT</span><span class="hl opt">.</span>write <span class="hl str">&quot;%010d\t:%d\n&quot;</span> <span class="hl opt">% [</span><span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>to_i<span class="hl opt">,</span> count<span class="hl opt">]</span>
+      <span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>times<span class="hl opt">!(</span>ZERO)
+    <span class="hl kwa">end</span> 
+    next_chunk
+  <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">if</span> <span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>to_i <span class="hl opt">&gt;</span> <span class="hl num">0</span>
+  <span class="hl kwc">STDOUT</span><span class="hl opt">.</span>write <span class="hl str">&quot;%s\t:%d\n&quot;</span> <span class="hl opt">% [</span><span class="hl kwb">&#64;display_chunk</span><span class="hl opt">.</span>to_s<span class="hl opt">.</span><span class="hl kwd">ljust</span><span class="hl opt">(</span><span class="hl num">10</span>)<span class="hl opt">,</span> count<span class="hl opt">]</span>
+<span class="hl kwa">end</span>

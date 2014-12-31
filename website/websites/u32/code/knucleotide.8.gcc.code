@@ -1,0 +1,370 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// Contributed by Jeremy Zerfas</span>
+
+<span class="hl slc">// This controls the initial size used for the hash tables. This needs to be a</span>
+<span class="hl slc">// power of two because a mask is also calculated from this by using</span>
+<span class="hl slc">// INITIAL_HASH_TABLE_SIZE-1.</span>
+<span class="hl ppc">#define INITIAL_HASH_TABLE_SIZE 64</span>
+<span class="hl slc">// This controls the maximum length for each set of nucleotide sequence</span>
+<span class="hl slc">// frequencies and each nucleotide sequence count output by this program.</span>
+<span class="hl ppc">#define MAXIMUM_OUTPUT_LENGTH 4096</span>
+
+<span class="hl ppc">#include &lt;stdint.h&gt;</span>
+<span class="hl ppc">#include &lt;stdlib.h&gt;</span>
+<span class="hl ppc">#include &lt;stdio.h&gt;</span>
+<span class="hl ppc">#include &lt;string.h&gt;</span>
+
+<span class="hl slc">// intptr_t should be the native integer type on most sane systems.</span>
+<span class="hl kwc">typedef</span> <span class="hl kwb">intptr_t</span> intnative_t<span class="hl opt">;</span>
+
+
+<span class="hl slc">//******************************************</span>
+<span class="hl slc">//*** Start of hash table implementation ***</span>
+<span class="hl slc">//******************************************</span>
+
+<span class="hl slc">// In order to prevent too many collisions from occurring the hash table is</span>
+<span class="hl slc">// grown when it is filled to a certain percentage. This value sets the</span>
+<span class="hl slc">// percentage that controls when growing should occur. This value must be set as</span>
+<span class="hl slc">// a fraction between 0 and 1 but sane values are generally around 3/4. Setting</span>
+<span class="hl slc">// the value too low causes the hash table to be made larger than it needs to be</span>
+<span class="hl slc">// which reduces the effectiveness of caches and setting it too high will cause</span>
+<span class="hl slc">// a large amount of collisions.</span>
+<span class="hl ppc">#define HASH_TABLE_LOAD_LIMIT 12/16</span>
+
+<span class="hl kwc">typedef</span> <span class="hl kwb">struct</span> element<span class="hl opt">{</span>
+   <span class="hl ppc">#define      EMPTY_VALUE_KEY -1</span>
+   <span class="hl kwb">int64_t</span>      key<span class="hl opt">;</span>    <span class="hl slc">// If key is negative, then this element is empty,</span>
+                  <span class="hl slc">// otherwise key and value contain the unmodified key</span>
+                  <span class="hl slc">// and value.</span>
+   <span class="hl kwb">int32_t</span>      value<span class="hl opt">;</span>
+<span class="hl opt">}</span> element<span class="hl opt">;</span>
+
+<span class="hl kwc">typedef</span> <span class="hl kwb">struct</span> hash_table<span class="hl opt">{</span>
+   intnative_t   size<span class="hl opt">;</span>         <span class="hl slc">// The current capacity of the hash table. Never</span>
+                        <span class="hl slc">// will actually be reached since the hash table</span>
+                        <span class="hl slc">// will be grown first when it reaches</span>
+                        <span class="hl slc">// element_Limit.</span>
+   <span class="hl kwb">int64_t</span>      key_Mask<span class="hl opt">;</span>      <span class="hl slc">// ANDed with keys to make sure that hash table</span>
+                        <span class="hl slc">// indexes do not exceed the size of the hash</span>
+                        <span class="hl slc">// table.</span>
+   intnative_t   element_Limit<span class="hl opt">;</span>   <span class="hl slc">// Controls the maximum amount of elements that</span>
+                        <span class="hl slc">// are allowed in the hash table before it will</span>
+                        <span class="hl slc">// be grown.</span>
+   intnative_t   element_Count<span class="hl opt">;</span>   <span class="hl slc">// The current amount of elements in the hash</span>
+                        <span class="hl slc">// table.</span>
+   element   <span class="hl opt">*</span>   elements<span class="hl opt">;</span>
+<span class="hl opt">}</span> hash_table<span class="hl opt">;</span>
+
+
+<span class="hl slc">// Create a hash table with space allocated for requested_Size elements.</span>
+<span class="hl slc">// requested_Size must be a power of two since the mask for keys is defined as</span>
+<span class="hl slc">// requested_Size-1.</span>
+<span class="hl kwb">static</span> hash_table <span class="hl opt">*</span> <span class="hl kwd">create_Hash_Table</span><span class="hl opt">(</span>intnative_t requested_Size<span class="hl opt">){</span>
+   hash_table <span class="hl opt">*</span> created_Hash_Table<span class="hl opt">=</span><span class="hl kwd">malloc</span><span class="hl opt">(</span><span class="hl kwa">sizeof</span><span class="hl opt">(</span>hash_table<span class="hl opt">));</span>
+
+   <span class="hl slc">// Initialize the properties for the created_Hash_Table.</span>
+   created_Hash_Table<span class="hl opt">-&gt;</span>size<span class="hl opt">=</span>requested_Size<span class="hl opt">;</span>
+   created_Hash_Table<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">=</span>requested_Size<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;</span>
+   created_Hash_Table<span class="hl opt">-&gt;</span>element_Limit<span class="hl opt">=</span>requested_Size<span class="hl opt">*</span>HASH_TABLE_LOAD_LIMIT<span class="hl opt">;</span>
+   created_Hash_Table<span class="hl opt">-&gt;</span>element_Count<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   created_Hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">=</span><span class="hl kwd">malloc</span><span class="hl opt">(</span>requested_Size<span class="hl opt">*</span><span class="hl kwa">sizeof</span><span class="hl opt">(</span>element<span class="hl opt">));</span>
+
+   <span class="hl slc">// Initialize all elements in the created_Hash_Table to have initial keys</span>
+   <span class="hl slc">// set to EMPTY_VALUE_KEY and values set to 0.</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>requested_Size<span class="hl opt">;</span> i<span class="hl opt">++)</span>
+      created_Hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">[</span>i<span class="hl opt">]=(</span>element<span class="hl opt">){</span>EMPTY_VALUE_KEY<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">};</span>
+
+   <span class="hl kwa">return</span> created_Hash_Table<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Destroy hash table pointed to by hash_Table_To_Destroy and all of its</span>
+<span class="hl slc">// elements.</span>
+<span class="hl kwb">static void</span> <span class="hl kwd">destroy_Hash_Table</span><span class="hl opt">(</span>hash_table <span class="hl opt">*</span> hash_Table_To_Destroy<span class="hl opt">){</span>
+   <span class="hl kwd">free</span><span class="hl opt">(</span>hash_Table_To_Destroy<span class="hl opt">-&gt;</span>elements<span class="hl opt">);</span>
+   <span class="hl kwd">free</span><span class="hl opt">(</span>hash_Table_To_Destroy<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Hash function used to hash keys.</span>
+<span class="hl ppc">#define hash_Key(key) (key ^ key&gt;&gt;7)</span>
+
+
+<span class="hl slc">// Grow hash_Table_To_Grow by quadrupling it in size. A new elements array is</span>
+<span class="hl slc">// created, the existing elements are inserted into the new elements array, the</span>
+<span class="hl slc">// old elements array is deleted, and the properties for hash_Table_To_Grow are</span>
+<span class="hl slc">// updated. </span>
+<span class="hl kwb">static void</span> <span class="hl kwd">grow_Hash_Table</span><span class="hl opt">(</span>hash_table <span class="hl opt">*</span> <span class="hl kwb">const</span> hash_Table_To_Grow<span class="hl opt">){</span>
+   <span class="hl kwb">const</span> intnative_t old_Hash_Table_Size<span class="hl opt">=</span>hash_Table_To_Grow<span class="hl opt">-&gt;</span>size<span class="hl opt">;</span>
+   <span class="hl kwb">const</span> intnative_t new_Hash_Table_Size<span class="hl opt">=</span>old_Hash_Table_Size<span class="hl opt">*</span><span class="hl num">4</span><span class="hl opt">;</span>
+
+   <span class="hl slc">// Keep a reference to old_Hash_Table_Elements and allocate space for</span>
+   <span class="hl slc">// new_Hash_Table_Elements.</span>
+   element <span class="hl opt">*</span> <span class="hl kwb">const</span> old_Hash_Table_Elements<span class="hl opt">=</span>hash_Table_To_Grow<span class="hl opt">-&gt;</span>elements<span class="hl opt">;</span>
+   element <span class="hl opt">*</span> <span class="hl kwb">const</span> new_Hash_Table_Elements<span class="hl opt">=</span><span class="hl kwd">malloc</span><span class="hl opt">(</span>new_Hash_Table_Size<span class="hl opt">*</span>
+     <span class="hl kwa">sizeof</span><span class="hl opt">(</span>element<span class="hl opt">));</span>
+
+   <span class="hl slc">// Update the properties for the hash_Table_To_Grow.</span>
+   hash_Table_To_Grow<span class="hl opt">-&gt;</span>size<span class="hl opt">=</span>new_Hash_Table_Size<span class="hl opt">;</span>
+   hash_Table_To_Grow<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">=</span>new_Hash_Table_Size<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;</span>
+   hash_Table_To_Grow<span class="hl opt">-&gt;</span>element_Limit<span class="hl opt">=</span>new_Hash_Table_Size<span class="hl opt">*</span>HASH_TABLE_LOAD_LIMIT<span class="hl opt">;</span>
+   hash_Table_To_Grow<span class="hl opt">-&gt;</span>elements<span class="hl opt">=</span>new_Hash_Table_Elements<span class="hl opt">;</span>
+
+   <span class="hl slc">// Initialize all elements in new_Hash_Table_Elements to have initial keys</span>
+   <span class="hl slc">// set to EMPTY_VALUE_KEY and values set to 0.</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>new_Hash_Table_Size<span class="hl opt">;</span> i<span class="hl opt">++)</span>
+      new_Hash_Table_Elements<span class="hl opt">[</span>i<span class="hl opt">]=(</span>element<span class="hl opt">){</span>EMPTY_VALUE_KEY<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">};</span>
+
+   <span class="hl slc">// Copy all old_Hash_Table_Elements to new_Hash_Table_Elements. This code is</span>
+   <span class="hl slc">// simpler and faster than using the find_Or_Add_Element_For_Key() function</span>
+   <span class="hl slc">// since we don't need to worry about updating element_Count and checking to</span>
+   <span class="hl slc">// see if we have reached element_Limit.</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>old_Hash_Table_Size<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>old_Hash_Table_Elements<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">&gt;=</span><span class="hl num">0</span><span class="hl opt">){</span>
+         <span class="hl kwb">int64_t</span> elements_Index<span class="hl opt">=</span><span class="hl kwd">hash_Key</span><span class="hl opt">(</span>old_Hash_Table_Elements<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">) &amp;</span>
+           hash_Table_To_Grow<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">;</span>
+
+         <span class="hl slc">// Find the first free spot in new_Hash_Table_Elements and copy the</span>
+         <span class="hl slc">// old element to it.</span>
+         <span class="hl kwa">while</span><span class="hl opt">(</span>new_Hash_Table_Elements<span class="hl opt">[</span>elements_Index<span class="hl opt">].</span>key<span class="hl opt">&gt;=</span><span class="hl num">0</span><span class="hl opt">){</span>
+            elements_Index<span class="hl opt">++;</span>
+            elements_Index<span class="hl opt">&amp;=</span>hash_Table_To_Grow<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">;</span>
+         <span class="hl opt">}</span>
+         new_Hash_Table_Elements<span class="hl opt">[</span>elements_Index<span class="hl opt">]=</span>old_Hash_Table_Elements<span class="hl opt">[</span>i<span class="hl opt">];</span>
+      <span class="hl opt">}</span>
+   <span class="hl opt">};</span>
+
+   <span class="hl kwd">free</span><span class="hl opt">(</span>old_Hash_Table_Elements<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// See if key is already in hash_Table and if so then return the element for it,</span>
+<span class="hl slc">// otherwise add the key to hash_table (and grow it if necessary) and return the</span>
+<span class="hl slc">// element for it.</span>
+<span class="hl kwb">static</span> <span class="hl kwc">inline</span> element <span class="hl opt">*</span> <span class="hl kwd">find_Or_Add_Element_For_Key</span><span class="hl opt">(</span>
+  hash_table <span class="hl opt">*</span> <span class="hl kwb">const</span> hash_Table<span class="hl opt">,</span> <span class="hl kwb">const int64_t</span> key<span class="hl opt">){</span>
+   <span class="hl kwb">int64_t</span> elements_Index<span class="hl opt">=</span><span class="hl kwd">hash_Key</span><span class="hl opt">(</span>key<span class="hl opt">) &amp;</span> hash_Table<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">;</span>
+
+   <span class="hl slc">// Search hash_Table for key.</span>
+   element <span class="hl opt">*</span> <span class="hl kwb">const</span> elements<span class="hl opt">=</span>hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">;</span>
+   <span class="hl kwa">while</span><span class="hl opt">(</span>elements<span class="hl opt">[</span>elements_Index<span class="hl opt">].</span>key<span class="hl opt">!=</span>key<span class="hl opt">){</span>
+      <span class="hl slc">// If we reach a key with a negative value then that means that key is</span>
+      <span class="hl slc">// not in hash_Table so we will go ahead and add it.</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>elements<span class="hl opt">[</span>elements_Index<span class="hl opt">].</span>key<span class="hl opt">&lt;</span><span class="hl num">0</span><span class="hl opt">){</span>
+         <span class="hl slc">// If we're at the hash table's load limit then grow the hash table</span>
+         <span class="hl slc">// and call this function a second time to add and return an item.</span>
+         <span class="hl kwa">if</span><span class="hl opt">(</span>hash_Table<span class="hl opt">-&gt;</span>element_Count<span class="hl opt">&gt;=</span>hash_Table<span class="hl opt">-&gt;</span>element_Limit<span class="hl opt">){</span>
+            <span class="hl kwd">grow_Hash_Table</span><span class="hl opt">(</span>hash_Table<span class="hl opt">);</span>
+            <span class="hl kwa">return</span> <span class="hl kwd">find_Or_Add_Element_For_Key</span><span class="hl opt">(</span>hash_Table<span class="hl opt">,</span> key<span class="hl opt">);</span>
+         <span class="hl opt">}</span>
+
+         <span class="hl slc">// Set the key for this element to key, increment element_Count, and</span>
+         <span class="hl slc">// break out of the loop so that this element will be returned.</span>
+         elements<span class="hl opt">[</span>elements_Index<span class="hl opt">].</span>key<span class="hl opt">=</span>key<span class="hl opt">;</span>
+         hash_Table<span class="hl opt">-&gt;</span>element_Count<span class="hl opt">++;</span>
+         <span class="hl kwa">break</span><span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl slc">// Still haven't found key or a free spot so continue to the next index.</span>
+      elements_Index<span class="hl opt">++;</span>
+      elements_Index<span class="hl opt">&amp;=</span>hash_Table<span class="hl opt">-&gt;</span>key_Mask<span class="hl opt">;</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> <span class="hl opt">&amp;(</span>elements<span class="hl opt">[</span>elements_Index<span class="hl opt">]);</span>
+<span class="hl opt">}</span>
+<span class="hl slc">//******************************************</span>
+<span class="hl slc">//***  End of hash table implementation  ***</span>
+<span class="hl slc">//******************************************</span>
+
+
+<span class="hl slc">// Function to use when sorting elements with qsort() later. Elements with</span>
+<span class="hl slc">// larger values will come first and in cases of identical values then elements</span>
+<span class="hl slc">// with smaller keys will come first.</span>
+<span class="hl kwb">static int</span> <span class="hl kwd">element_Compare</span><span class="hl opt">(</span><span class="hl kwb">const void</span> <span class="hl opt">*</span> uncasted_Left_Element<span class="hl opt">,</span>
+  <span class="hl kwb">const void</span> <span class="hl opt">*</span> uncasted_Right_Element<span class="hl opt">){</span>
+   <span class="hl kwb">const</span> element <span class="hl opt">*</span> left_Element<span class="hl opt">=</span>uncasted_Left_Element<span class="hl opt">,</span>
+     <span class="hl opt">*</span> right_Element<span class="hl opt">=</span>uncasted_Right_Element<span class="hl opt">;</span>
+
+   <span class="hl slc">// Sort based on element values.</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>left_Element<span class="hl opt">-&gt;</span>value <span class="hl opt">&lt;</span> right_Element<span class="hl opt">-&gt;</span>value<span class="hl opt">)</span> <span class="hl kwa">return</span> <span class="hl num">1</span><span class="hl opt">;</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>left_Element<span class="hl opt">-&gt;</span>value <span class="hl opt">&gt;</span> right_Element<span class="hl opt">-&gt;</span>value<span class="hl opt">)</span> <span class="hl kwa">return</span> <span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;</span>
+
+   <span class="hl slc">// If we got here then both items have the same value so then sort based on</span>
+   <span class="hl slc">// key.</span>
+   <span class="hl kwa">if</span><span class="hl opt">(</span>left_Element<span class="hl opt">-&gt;</span>key <span class="hl opt">&gt;</span> right_Element<span class="hl opt">-&gt;</span>key<span class="hl opt">)</span>
+      <span class="hl kwa">return</span> <span class="hl num">1</span><span class="hl opt">;</span>
+   <span class="hl kwa">else</span>
+      <span class="hl kwa">return</span> <span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Macro to convert a nucleotide character to a code. Note that upper and lower</span>
+<span class="hl slc">// case ASCII letters only differ in the fifth bit from the right and we only</span>
+<span class="hl slc">// need the three least significant bits to differentiate the letters 'A', 'C',</span>
+<span class="hl slc">// 'G', and 'T'. Spaces in this array/string will never be used as long as</span>
+<span class="hl slc">// characters other than 'A', 'C', 'G', and 'T' aren't used.</span>
+<span class="hl ppc">#define code_For_Nucleotide(nucleotide) (</span><span class="hl pps">&quot; \0 \1\3  \2&quot;</span><span class="hl ppc">[nucleotide &amp; 0x7])</span>
+
+
+<span class="hl slc">// And one more macro to convert the codes back to nucleotide characters.</span>
+<span class="hl ppc">#define nucleotide_For_Code(code) (</span><span class="hl pps">&quot;ACGT&quot;</span><span class="hl ppc">[code &amp; 0x3])</span>
+
+
+<span class="hl slc">// Generate frequences for all nucleotide sequences in sequences that are of</span>
+<span class="hl slc">// length sequence_Length and then save it to output.</span>
+<span class="hl kwb">static void</span> <span class="hl kwd">generate_Frequencies_For_Sequences</span><span class="hl opt">(</span><span class="hl kwb">char</span> <span class="hl opt">*</span> sequences<span class="hl opt">,</span>
+  intnative_t sequences_Length<span class="hl opt">,</span> intnative_t sequence_Length<span class="hl opt">,</span> <span class="hl kwb">char</span> <span class="hl opt">*</span> output<span class="hl opt">){</span>
+   hash_table <span class="hl opt">*</span> hash_Table<span class="hl opt">=</span><span class="hl kwd">create_Hash_Table</span><span class="hl opt">(</span>INITIAL_HASH_TABLE_SIZE<span class="hl opt">);</span>
+
+   <span class="hl slc">// Add all the sequences of sequence_Length to hash_Table.</span>
+   <span class="hl kwb">int64_t</span> code<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>sequences_Length<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      <span class="hl kwb">const int64_t</span> mask<span class="hl opt">=((</span><span class="hl kwb">int64_t</span><span class="hl opt">)</span><span class="hl num">1</span><span class="hl opt">&lt;&lt;</span><span class="hl num">2</span><span class="hl opt">*</span>sequence_Length<span class="hl opt">)-</span><span class="hl num">1</span><span class="hl opt">;</span>
+      code<span class="hl opt">=(</span>code<span class="hl opt">&lt;&lt;</span><span class="hl num">2</span> <span class="hl opt">&amp;</span> mask<span class="hl opt">) |</span> sequences<span class="hl opt">[</span>i<span class="hl opt">];</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>i<span class="hl opt">&gt;=</span>sequence_Length<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">)</span>
+         <span class="hl kwd">find_Or_Add_Element_For_Key</span><span class="hl opt">(</span>hash_Table<span class="hl opt">,</span> code<span class="hl opt">)-&gt;</span>value<span class="hl opt">++;</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl slc">// Create an array of elements from hash_Table.</span>
+   intnative_t elements_Array_Size<span class="hl opt">=</span>hash_Table<span class="hl opt">-&gt;</span>element_Count<span class="hl opt">;</span>
+   element <span class="hl opt">*</span> elements_Array<span class="hl opt">=</span><span class="hl kwd">malloc</span><span class="hl opt">(</span>elements_Array_Size<span class="hl opt">*</span><span class="hl kwa">sizeof</span><span class="hl opt">(</span>element<span class="hl opt">));</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">,</span> j<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>hash_Table<span class="hl opt">-&gt;</span>size<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">&gt;=</span><span class="hl num">0</span><span class="hl opt">){</span>
+         elements_Array<span class="hl opt">[</span>j<span class="hl opt">].</span>key<span class="hl opt">=</span>hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">;</span>
+         elements_Array<span class="hl opt">[</span>j<span class="hl opt">].</span>value<span class="hl opt">=</span>hash_Table<span class="hl opt">-&gt;</span>elements<span class="hl opt">[</span>i<span class="hl opt">].</span>value<span class="hl opt">;</span>
+         j<span class="hl opt">++;</span>
+      <span class="hl opt">}</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl slc">// Sort elements_Array.</span>
+   <span class="hl kwd">qsort</span><span class="hl opt">(</span>elements_Array<span class="hl opt">,</span> elements_Array_Size<span class="hl opt">,</span> <span class="hl kwa">sizeof</span><span class="hl opt">(</span>element<span class="hl opt">),</span>
+     <span class="hl opt">&amp;</span>element_Compare<span class="hl opt">);</span>
+
+   <span class="hl slc">// Calculate the total count of all elements.</span>
+   intnative_t total_Count<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>elements_Array_Size<span class="hl opt">;</span> i<span class="hl opt">++)</span>
+      total_Count<span class="hl opt">+=</span>elements_Array<span class="hl opt">[</span>i<span class="hl opt">].</span>value<span class="hl opt">;</span>
+
+   <span class="hl slc">// Print the frequencies for each element.</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t output_Position<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">,</span> i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>elements_Array_Size<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      <span class="hl slc">// Decode key back into a nucleotide sequence.</span>
+      <span class="hl kwb">char</span> nucleotide_Sequence<span class="hl opt">[</span>sequence_Length<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">];</span>
+      <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t j<span class="hl opt">=</span>sequence_Length<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;</span> j<span class="hl opt">&gt;-</span><span class="hl num">1</span><span class="hl opt">;</span> j<span class="hl opt">--){</span>
+         nucleotide_Sequence<span class="hl opt">[</span>j<span class="hl opt">]=</span><span class="hl kwd">nucleotide_For_Code</span><span class="hl opt">(</span>elements_Array<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">);</span>
+         elements_Array<span class="hl opt">[</span>i<span class="hl opt">].</span>key<span class="hl opt">&gt;&gt;=</span><span class="hl num">2</span><span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+      nucleotide_Sequence<span class="hl opt">[</span>sequence_Length<span class="hl opt">]=</span><span class="hl str">'\0'</span><span class="hl opt">;</span>
+
+      <span class="hl slc">// Output the frequency for nucleotide_Sequence to output.</span>
+      output_Position<span class="hl opt">+=</span><span class="hl kwd">snprintf</span><span class="hl opt">(</span>output<span class="hl opt">+</span>output_Position<span class="hl opt">,</span>
+        MAXIMUM_OUTPUT_LENGTH<span class="hl opt">-</span>output_Position<span class="hl opt">,</span> <span class="hl str">&quot;%s %.3f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span>
+        nucleotide_Sequence<span class="hl opt">,</span> <span class="hl num">100.0</span>f<span class="hl opt">*</span>elements_Array<span class="hl opt">[</span>i<span class="hl opt">].</span>value<span class="hl opt">/</span>total_Count<span class="hl opt">);</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl kwd">free</span><span class="hl opt">(</span>elements_Array<span class="hl opt">);</span>
+   <span class="hl kwd">destroy_Hash_Table</span><span class="hl opt">(</span>hash_Table<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Generate a count for the number of time nucleotide_Sequence appears in</span>
+<span class="hl slc">// sequences and then save it to output.</span>
+<span class="hl kwb">static void</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span><span class="hl kwb">char</span> <span class="hl opt">*</span> sequences<span class="hl opt">,</span>
+  <span class="hl kwb">const</span> intnative_t sequences_Length<span class="hl opt">,</span> <span class="hl kwb">const char</span> <span class="hl opt">*</span> nucleotide_Sequence<span class="hl opt">,</span>
+  <span class="hl kwb">char</span> <span class="hl opt">*</span> output<span class="hl opt">){</span>
+   <span class="hl kwb">const</span> intnative_t nucleotide_Sequence_Length<span class="hl opt">=</span><span class="hl kwd">strlen</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">);</span>
+
+   hash_table <span class="hl opt">*</span> hash_Table<span class="hl opt">=</span><span class="hl kwd">create_Hash_Table</span><span class="hl opt">(</span>INITIAL_HASH_TABLE_SIZE<span class="hl opt">);</span>
+
+   <span class="hl slc">// Add all the sequences of nucleotide_Sequence_Length to hash_Table.</span>
+   <span class="hl kwb">int64_t</span> key<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>sequences_Length<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      <span class="hl kwb">const int64_t</span> mask<span class="hl opt">=((</span><span class="hl kwb">int64_t</span><span class="hl opt">)</span><span class="hl num">1</span><span class="hl opt">&lt;&lt;</span><span class="hl num">2</span><span class="hl opt">*</span>nucleotide_Sequence_Length<span class="hl opt">)-</span><span class="hl num">1</span><span class="hl opt">;</span>
+      key<span class="hl opt">=(</span>key<span class="hl opt">&lt;&lt;</span><span class="hl num">2</span> <span class="hl opt">&amp;</span> mask<span class="hl opt">) |</span> sequences<span class="hl opt">[</span>i<span class="hl opt">];</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>i<span class="hl opt">&gt;=</span>nucleotide_Sequence_Length<span class="hl opt">)</span>
+         <span class="hl kwd">find_Or_Add_Element_For_Key</span><span class="hl opt">(</span>hash_Table<span class="hl opt">,</span> key<span class="hl opt">)-&gt;</span>value<span class="hl opt">++;</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl slc">// Generate key for the sequence.</span>
+   key<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>nucleotide_Sequence_Length<span class="hl opt">;</span> i<span class="hl opt">++)</span>
+      key<span class="hl opt">=(</span>key<span class="hl opt">&lt;&lt;</span><span class="hl num">2</span><span class="hl opt">) |</span> <span class="hl kwd">code_For_Nucleotide</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">[</span>i<span class="hl opt">]);</span>
+
+   <span class="hl slc">// Output the count for nucleotide_Sequence to output.</span>
+   intnative_t count<span class="hl opt">=</span><span class="hl kwd">find_Or_Add_Element_For_Key</span><span class="hl opt">(</span>hash_Table<span class="hl opt">,</span> key<span class="hl opt">)-&gt;</span>value<span class="hl opt">;</span>
+   <span class="hl kwd">snprintf</span><span class="hl opt">(</span>output<span class="hl opt">,</span> MAXIMUM_OUTPUT_LENGTH<span class="hl opt">,</span> <span class="hl str">&quot;%jd</span><span class="hl esc">\t</span><span class="hl str">%s&quot;</span><span class="hl opt">, (</span><span class="hl kwb">intmax_t</span><span class="hl opt">)</span>count<span class="hl opt">,</span>
+     nucleotide_Sequence<span class="hl opt">);</span>
+
+   <span class="hl kwd">destroy_Hash_Table</span><span class="hl opt">(</span>hash_Table<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl kwb">int</span> <span class="hl kwd">main</span><span class="hl opt">(){</span>
+   <span class="hl kwb">char</span> buffer<span class="hl opt">[</span><span class="hl num">4096</span><span class="hl opt">];</span>
+
+   <span class="hl slc">// Find the start of the third nucleotide sequence.</span>
+   <span class="hl kwa">while</span><span class="hl opt">(</span><span class="hl kwd">fgets</span><span class="hl opt">(</span>buffer<span class="hl opt">,</span> <span class="hl kwa">sizeof</span><span class="hl opt">(</span>buffer<span class="hl opt">),</span> stdin<span class="hl opt">) &amp;&amp;</span> <span class="hl kwd">memcmp</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;THREE&quot;</span><span class="hl opt">,</span> buffer<span class="hl opt">,</span>
+     <span class="hl kwa">sizeof</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;THREE&quot;</span><span class="hl opt">)-</span><span class="hl num">1</span><span class="hl opt">));</span>
+
+   <span class="hl slc">// Start with 1 MB of storage for reading in the nucleotide sequence and</span>
+   <span class="hl slc">// grow exponentially.</span>
+   intnative_t nucleotide_Sequence_Capacity<span class="hl opt">=</span><span class="hl num">1048576</span><span class="hl opt">;</span>
+   intnative_t nucleotide_Sequence_Size<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+   <span class="hl kwb">char</span> <span class="hl opt">*</span> nucleotide_Sequence<span class="hl opt">=</span><span class="hl kwd">malloc</span><span class="hl opt">(</span>nucleotide_Sequence_Capacity<span class="hl opt">);</span>
+
+   <span class="hl slc">// Start reading and encoding the third nucleotide sequence.</span>
+   <span class="hl kwa">while</span><span class="hl opt">(</span><span class="hl kwd">fgets</span><span class="hl opt">(</span>buffer<span class="hl opt">,</span> <span class="hl kwa">sizeof</span><span class="hl opt">(</span>buffer<span class="hl opt">),</span> stdin<span class="hl opt">) &amp;&amp;</span> buffer<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">]!=</span><span class="hl str">'&gt;'</span><span class="hl opt">){</span>
+      <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> buffer<span class="hl opt">[</span>i<span class="hl opt">]!=</span><span class="hl str">'\0'</span><span class="hl opt">;</span> i<span class="hl opt">++){</span>
+         <span class="hl kwa">if</span><span class="hl opt">(</span>buffer<span class="hl opt">[</span>i<span class="hl opt">]!=</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+            nucleotide_Sequence<span class="hl opt">[</span>nucleotide_Sequence_Size<span class="hl opt">++]=</span>
+              <span class="hl kwd">code_For_Nucleotide</span><span class="hl opt">(</span>buffer<span class="hl opt">[</span>i<span class="hl opt">]);</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl slc">// Make sure we still have enough memory allocated for any potential</span>
+      <span class="hl slc">// nucleotides in the next line.</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>nucleotide_Sequence_Capacity<span class="hl opt">-</span>nucleotide_Sequence_Size <span class="hl opt">&lt;</span>
+        <span class="hl kwa">sizeof</span><span class="hl opt">(</span>buffer<span class="hl opt">)){</span>
+         nucleotide_Sequence_Capacity<span class="hl opt">*=</span><span class="hl num">2</span><span class="hl opt">;</span>
+         nucleotide_Sequence<span class="hl opt">=</span><span class="hl kwd">realloc</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+           nucleotide_Sequence_Capacity<span class="hl opt">);</span>
+      <span class="hl opt">}</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl slc">// Free up any leftover memory.</span>
+   nucleotide_Sequence<span class="hl opt">=</span><span class="hl kwd">realloc</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span> nucleotide_Sequence_Size<span class="hl opt">);</span>
+
+   <span class="hl kwb">char</span> output_Buffer<span class="hl opt">[</span><span class="hl num">7</span><span class="hl opt">][</span>MAXIMUM_OUTPUT_LENGTH<span class="hl opt">];</span>
+
+   <span class="hl slc">// Do the following functions in parallel.</span>
+   <span class="hl ppc">#pragma omp parallel sections</span>
+   <span class="hl opt">{</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Frequencies_For_Sequences</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">]); }</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Frequencies_For_Sequences</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]); }</span>
+
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl str">&quot;GGT&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">]); }</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl str">&quot;GGTA&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">3</span><span class="hl opt">]); }</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl str">&quot;GGTATT&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">4</span><span class="hl opt">]); }</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATT&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">5</span><span class="hl opt">]); }</span>
+      <span class="hl ppc">#pragma omp section</span>
+      <span class="hl opt">{</span> <span class="hl kwd">generate_Count_For_Sequence</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">,</span>
+        nucleotide_Sequence_Size<span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATTTATAGT&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span><span class="hl num">6</span><span class="hl opt">]); }</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span><span class="hl num">7</span><span class="hl opt">;</span> <span class="hl kwd">printf</span><span class="hl opt">(</span><span class="hl str">&quot;%s</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> output_Buffer<span class="hl opt">[</span>i<span class="hl opt">++]));</span>
+
+   <span class="hl kwd">free</span><span class="hl opt">(</span>nucleotide_Sequence<span class="hl opt">);</span>
+
+   <span class="hl kwa">return</span> <span class="hl num">0</span><span class="hl opt">;</span>
+<span class="hl opt">}</span>

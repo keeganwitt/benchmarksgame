@@ -1,0 +1,185 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// Contributed by Jeremy Zerfas</span>
+
+<span class="hl slc">// This controls the width of lines that are output by this program.</span>
+<span class="hl ppc">#define MAXIMUM_LINE_WIDTH   60</span>
+
+<span class="hl ppc">#include &lt;stdint.h&gt;</span>
+<span class="hl ppc">#include &lt;string.h&gt;</span>
+<span class="hl ppc">#include &lt;stdio.h&gt;</span>
+<span class="hl ppc">#include &lt;stdlib.h&gt;</span>
+
+<span class="hl slc">// intptr_t should be the native integer type on most sane systems.</span>
+<span class="hl kwc">typedef</span> <span class="hl kwb">intptr_t</span> intnative_t<span class="hl opt">;</span>
+
+<span class="hl kwc">typedef</span> <span class="hl kwb">struct</span><span class="hl opt">{</span>
+   <span class="hl kwb">char</span> letter<span class="hl opt">;</span>
+   <span class="hl kwb">float</span> probability<span class="hl opt">;</span>
+<span class="hl opt">}</span> nucleotide_info<span class="hl opt">;</span>
+
+
+<span class="hl slc">// Repeatedly print string_To_Repeat until it has printed</span>
+<span class="hl slc">// number_Of_Characters_To_Create. The output is also wrapped to</span>
+<span class="hl slc">// MAXIMUM_LINE_WIDTH columns.</span>
+<span class="hl kwb">static void</span> <span class="hl kwd">repeat_And_Wrap_String</span><span class="hl opt">(</span><span class="hl kwb">const char</span> string_To_Repeat<span class="hl opt">[],</span>
+  <span class="hl kwb">const</span> intnative_t number_Of_Characters_To_Create<span class="hl opt">){</span>
+   <span class="hl kwb">const</span> intnative_t string_To_Repeat_Length<span class="hl opt">=</span><span class="hl kwd">strlen</span><span class="hl opt">(</span>string_To_Repeat<span class="hl opt">);</span>
+
+   <span class="hl slc">// Create an extended_String_To_Repeat which is a copy of string_To_Repeat</span>
+   <span class="hl slc">// but extended with another copy of the first MAXIMUM_LINE_WIDTH characters</span>
+   <span class="hl slc">// of string_To_Repeat appended to the end. Later on this allows us to</span>
+   <span class="hl slc">// generate a line of output just by doing simple memory copies using an</span>
+   <span class="hl slc">// appropriate offset into extended_String_To_Repeat.</span>
+   <span class="hl kwb">char</span> extended_String_To_Repeat<span class="hl opt">[</span>string_To_Repeat_Length<span class="hl opt">+</span>MAXIMUM_LINE_WIDTH<span class="hl opt">];</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t column<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> column<span class="hl opt">&lt;</span>string_To_Repeat_Length<span class="hl opt">+</span>MAXIMUM_LINE_WIDTH<span class="hl opt">;</span>
+     column<span class="hl opt">++)</span>
+      extended_String_To_Repeat<span class="hl opt">[</span>column<span class="hl opt">]=</span>
+        string_To_Repeat<span class="hl opt">[</span>column<span class="hl opt">%</span>string_To_Repeat_Length<span class="hl opt">];</span>
+   intnative_t offset<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+
+   <span class="hl kwb">char</span> line<span class="hl opt">[</span>MAXIMUM_LINE_WIDTH<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">];</span>
+   line<span class="hl opt">[</span>MAXIMUM_LINE_WIDTH<span class="hl opt">]=</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">;</span>
+
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t current_Number_Of_Characters_To_Create<span class="hl opt">=</span>
+     number_Of_Characters_To_Create<span class="hl opt">;</span>
+     current_Number_Of_Characters_To_Create<span class="hl opt">&gt;</span><span class="hl num">0</span><span class="hl opt">;){</span>
+      <span class="hl slc">// Figure out the length of the line we need to write. If it's less than</span>
+      <span class="hl slc">// MAXIMUM_LINE_WIDTH then we also need to add a line feed in the right</span>
+      <span class="hl slc">// spot too.</span>
+      intnative_t line_Length<span class="hl opt">=</span>MAXIMUM_LINE_WIDTH<span class="hl opt">;</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>current_Number_Of_Characters_To_Create<span class="hl opt">&lt;</span>MAXIMUM_LINE_WIDTH<span class="hl opt">){</span>
+         line_Length<span class="hl opt">=</span>current_Number_Of_Characters_To_Create<span class="hl opt">;</span>
+         line<span class="hl opt">[</span>line_Length<span class="hl opt">]=</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl kwd">memcpy</span><span class="hl opt">(</span>line<span class="hl opt">,</span> extended_String_To_Repeat<span class="hl opt">+</span>offset<span class="hl opt">,</span> line_Length<span class="hl opt">);</span>
+
+      <span class="hl slc">// Update the offset, reducing it by string_To_Repeat_Length if</span>
+      <span class="hl slc">// necessary.</span>
+      offset<span class="hl opt">+=</span>line_Length<span class="hl opt">;</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>offset<span class="hl opt">&gt;</span>string_To_Repeat_Length<span class="hl opt">)</span>
+         offset<span class="hl opt">-=</span>string_To_Repeat_Length<span class="hl opt">;</span>
+
+      <span class="hl slc">// Output the line to stdout and update the</span>
+      <span class="hl slc">// current_Number_Of_Characters_To_Create.</span>
+      <span class="hl kwd">fwrite</span><span class="hl opt">(</span>line<span class="hl opt">,</span> line_Length<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">,</span> stdout<span class="hl opt">);</span>
+      current_Number_Of_Characters_To_Create<span class="hl opt">-=</span>line_Length<span class="hl opt">;</span>
+   <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Generate a floating point pseudorandom number from 0.0 to max using a linear</span>
+<span class="hl slc">// congruential generator.</span>
+<span class="hl ppc">#define IM      139968</span>
+<span class="hl ppc">#define IA      3877</span>
+<span class="hl ppc">#define IC      29573</span>
+<span class="hl ppc">#define SEED   42</span>
+<span class="hl kwb">static</span> <span class="hl kwc">inline</span> <span class="hl kwb">float</span> <span class="hl kwd">get_LCG_Pseudorandom_Number</span><span class="hl opt">(</span><span class="hl kwb">const float</span> max<span class="hl opt">){</span>
+   <span class="hl kwb">static uint32_t</span> seed<span class="hl opt">=</span>SEED<span class="hl opt">;</span>
+   seed<span class="hl opt">=(</span>seed<span class="hl opt">*</span>IA <span class="hl opt">+</span> IC<span class="hl opt">)%</span>IM<span class="hl opt">;</span>
+   <span class="hl kwa">return</span> max<span class="hl opt">/</span>IM<span class="hl opt">*</span>seed<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl slc">// Print a pseudorandom DNA sequence that is number_Of_Characters_To_Create</span>
+<span class="hl slc">// characters long and made up of the nucleotides specified in</span>
+<span class="hl slc">// nucleotides_Information and occurring at the frequencies specified in</span>
+<span class="hl slc">// nucleotides_Information. The output is also wrapped to MAXIMUM_LINE_WIDTH</span>
+<span class="hl slc">// columns.</span>
+<span class="hl kwb">static void</span> <span class="hl kwd">generate_And_Wrap_Pseudorandom_DNA_Sequence</span><span class="hl opt">(</span>
+  <span class="hl kwb">const</span> nucleotide_info nucleotides_Information<span class="hl opt">[],</span>
+  <span class="hl kwb">const</span> intnative_t number_Of_Nucleotides<span class="hl opt">,</span>
+  <span class="hl kwb">const</span> intnative_t number_Of_Characters_To_Create<span class="hl opt">){</span>
+
+   <span class="hl slc">// Cumulate the probabilities. Note that the probability is being multiplied</span>
+   <span class="hl slc">// by IM because later on we'll also be calling the random number generator</span>
+   <span class="hl slc">// with a value that is multiplied by IM. Since the random number generator</span>
+   <span class="hl slc">// does a division by IM this allows the compiler to cancel out the</span>
+   <span class="hl slc">// multiplication and division by IM with each other without requiring any</span>
+   <span class="hl slc">// changes to the random number generator code whose code was explicitly</span>
+   <span class="hl slc">// defined in the rules.</span>
+   <span class="hl kwb">float</span> cumulative_Probabilities<span class="hl opt">[</span>number_Of_Nucleotides<span class="hl opt">],</span>
+     cumulative_Probability<span class="hl opt">=</span><span class="hl num">0.0</span><span class="hl opt">;</span>
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>number_Of_Nucleotides<span class="hl opt">;</span> i<span class="hl opt">++){</span>
+      cumulative_Probability<span class="hl opt">+=</span>nucleotides_Information<span class="hl opt">[</span>i<span class="hl opt">].</span>probability<span class="hl opt">;</span>
+      cumulative_Probabilities<span class="hl opt">[</span>i<span class="hl opt">]=</span>cumulative_Probability<span class="hl opt">*</span>IM<span class="hl opt">;</span>
+   <span class="hl opt">}</span>
+
+   <span class="hl kwb">char</span> line<span class="hl opt">[</span>MAXIMUM_LINE_WIDTH<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">];</span>
+   line<span class="hl opt">[</span>MAXIMUM_LINE_WIDTH<span class="hl opt">]=</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">;</span>
+
+   <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t current_Number_Of_Characters_To_Create<span class="hl opt">=</span>
+     number_Of_Characters_To_Create<span class="hl opt">;</span>
+     current_Number_Of_Characters_To_Create<span class="hl opt">&gt;</span><span class="hl num">0</span><span class="hl opt">;){</span>
+      <span class="hl slc">// Figure out the length of the line we need to write. If it's less than</span>
+      <span class="hl slc">// MAXIMUM_LINE_WIDTH then we also need to add a line feed in the right</span>
+      <span class="hl slc">// spot too.</span>
+      intnative_t line_Length<span class="hl opt">=</span>MAXIMUM_LINE_WIDTH<span class="hl opt">;</span>
+      <span class="hl kwa">if</span><span class="hl opt">(</span>current_Number_Of_Characters_To_Create<span class="hl opt">&lt;</span>MAXIMUM_LINE_WIDTH<span class="hl opt">){</span>
+         line_Length<span class="hl opt">=</span>current_Number_Of_Characters_To_Create<span class="hl opt">;</span>
+         line<span class="hl opt">[</span>line_Length<span class="hl opt">]=</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl slc">// Fill up the line with characters from nucleotides_Information[] that</span>
+      <span class="hl slc">// are selected by looking up a pseudorandom number.</span>
+      <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t column<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> column<span class="hl opt">&lt;</span>line_Length<span class="hl opt">;</span> column<span class="hl opt">++){</span>
+         <span class="hl kwb">const float</span> r<span class="hl opt">=</span><span class="hl kwd">get_LCG_Pseudorandom_Number</span><span class="hl opt">(</span>IM<span class="hl opt">);</span>
+
+         <span class="hl slc">// Count the number of nucleotides with a probability less than what</span>
+         <span class="hl slc">// was selected by the random number generator and then use that</span>
+         <span class="hl slc">// count as an index for the nucleotide to select. It's arguable</span>
+         <span class="hl slc">// whether this qualifies as a linear search but I guess you can say</span>
+         <span class="hl slc">// that you're doing a linear search for all the nucleotides with a</span>
+         <span class="hl slc">// probability less than what was selected by the random number</span>
+         <span class="hl slc">// generator and then just counting how many matches were found.</span>
+         <span class="hl slc">// With a small number of nucleotides this can be faster than doing</span>
+         <span class="hl slc">// a more normal linear search (although in some cases it may</span>
+         <span class="hl slc">// generate different results) and a couple of the other programs</span>
+         <span class="hl slc">// already do this as well so we will too.</span>
+         intnative_t count<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>
+         <span class="hl kwa">for</span><span class="hl opt">(</span>intnative_t i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">&lt;</span>number_Of_Nucleotides<span class="hl opt">;</span> i<span class="hl opt">++)</span>
+            <span class="hl kwa">if</span><span class="hl opt">(</span>cumulative_Probabilities<span class="hl opt">[</span>i<span class="hl opt">]&lt;=</span>r<span class="hl opt">)</span>
+               count<span class="hl opt">++;</span>
+
+         line<span class="hl opt">[</span>column<span class="hl opt">]=</span>nucleotides_Information<span class="hl opt">[</span>count<span class="hl opt">].</span>letter<span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+
+      <span class="hl slc">// Output the line to stdout and update the</span>
+      <span class="hl slc">// current_Number_Of_Characters_To_Create.</span>
+      <span class="hl kwd">fwrite</span><span class="hl opt">(</span>line<span class="hl opt">,</span> line_Length<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">,</span> stdout<span class="hl opt">);</span>
+      current_Number_Of_Characters_To_Create<span class="hl opt">-=</span>line_Length<span class="hl opt">;</span>
+   <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+
+<span class="hl kwb">int</span> <span class="hl kwd">main</span><span class="hl opt">(</span><span class="hl kwb">int</span> argc<span class="hl opt">,</span> <span class="hl kwb">char</span> <span class="hl opt">**</span> argv<span class="hl opt">){</span>
+   <span class="hl kwb">const</span> intnative_t n<span class="hl opt">=</span><span class="hl kwd">atoi</span><span class="hl opt">(</span>argv<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]);</span>
+
+   <span class="hl kwd">fputs</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;ONE Homo sapiens alu</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> stdout<span class="hl opt">);</span>
+   <span class="hl kwb">const char</span> homo_Sapiens_Alu<span class="hl opt">[]=</span>
+     <span class="hl str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTC&quot;</span>
+     <span class="hl str">&quot;AGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCG&quot;</span>
+     <span class="hl str">&quot;TGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGG&quot;</span>
+     <span class="hl str">&quot;AGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span><span class="hl opt">;</span>
+   <span class="hl kwd">repeat_And_Wrap_String</span><span class="hl opt">(</span>homo_Sapiens_Alu<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">*</span>n<span class="hl opt">);</span>
+
+   <span class="hl kwd">fputs</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;TWO IUB ambiguity codes</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> stdout<span class="hl opt">);</span>
+   nucleotide_info iub_Nucleotides_Information<span class="hl opt">[]={</span>
+     <span class="hl opt">{</span><span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl num">0.27</span><span class="hl opt">}, {</span><span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl num">0.12</span><span class="hl opt">}, {</span><span class="hl str">'g'</span><span class="hl opt">,</span> <span class="hl num">0.12</span><span class="hl opt">}, {</span><span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl num">0.27</span><span class="hl opt">}, {</span><span class="hl str">'B'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">},</span>
+     <span class="hl opt">{</span><span class="hl str">'D'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'H'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'K'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'M'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'N'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">},</span>
+     <span class="hl opt">{</span><span class="hl str">'R'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'S'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'V'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'W'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}, {</span><span class="hl str">'Y'</span><span class="hl opt">,</span> <span class="hl num">0.02</span><span class="hl opt">}};</span>
+   <span class="hl kwd">generate_And_Wrap_Pseudorandom_DNA_Sequence</span><span class="hl opt">(</span>iub_Nucleotides_Information<span class="hl opt">,</span>
+     <span class="hl kwa">sizeof</span><span class="hl opt">(</span>iub_Nucleotides_Information<span class="hl opt">)/</span><span class="hl kwa">sizeof</span><span class="hl opt">(</span>nucleotide_info<span class="hl opt">),</span> <span class="hl num">3</span><span class="hl opt">*</span>n<span class="hl opt">);</span>
+
+   <span class="hl kwd">fputs</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;THREE Homo sapiens frequency</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> stdout<span class="hl opt">);</span>
+   nucleotide_info homo_Sapien_Nucleotides_Information<span class="hl opt">[]={</span>
+     <span class="hl opt">{</span><span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl num">0.3029549426680</span><span class="hl opt">}, {</span><span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl num">0.1979883004921</span><span class="hl opt">},</span>
+     <span class="hl opt">{</span><span class="hl str">'g'</span><span class="hl opt">,</span> <span class="hl num">0.1975473066391</span><span class="hl opt">}, {</span><span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl num">0.3015094502008</span><span class="hl opt">}};</span>
+   <span class="hl kwd">generate_And_Wrap_Pseudorandom_DNA_Sequence</span><span class="hl opt">(</span>
+     homo_Sapien_Nucleotides_Information<span class="hl opt">,</span>
+     <span class="hl kwa">sizeof</span><span class="hl opt">(</span>homo_Sapien_Nucleotides_Information<span class="hl opt">)/</span><span class="hl kwa">sizeof</span><span class="hl opt">(</span>nucleotide_info<span class="hl opt">),</span> <span class="hl num">5</span><span class="hl opt">*</span>n<span class="hl opt">);</span>
+
+   <span class="hl kwa">return</span> <span class="hl num">0</span><span class="hl opt">;</span>
+<span class="hl opt">}</span>

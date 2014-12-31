@@ -1,0 +1,108 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="hl slc">// The code draws inspiration from the entry of Branimir Maksimovic.</span>
+<span class="hl slc">// Contributed by Tasos Vogiatzoglou</span>
+
+
+<span class="hl ppc">#include &lt;iostream&gt;</span>
+<span class="hl ppc">#include &lt;iomanip&gt;</span>
+<span class="hl ppc">#include &lt;string&gt;</span>
+<span class="hl ppc">#include &lt;algorithm&gt;</span>
+<span class="hl ppc">#include &lt;unordered_map&gt;</span>
+<span class="hl ppc">#include &lt;vector&gt;</span>
+<span class="hl ppc">#include &lt;future&gt;</span>
+<span class="hl ppc">#include &lt;unistd.h&gt;</span>
+
+<span class="hl kwa">using namespace</span> std<span class="hl opt">;</span>
+
+<span class="hl slc">// we don't need ordering as we will sort them at the end</span>
+<span class="hl kwc">typedef</span> unordered_map<span class="hl opt">&lt;</span>string<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span><span class="hl opt">&gt;</span> FreqMap<span class="hl opt">;</span>
+
+FreqMap <span class="hl kwd">calculate_freqs</span><span class="hl opt">(</span><span class="hl kwb">const</span> string <span class="hl opt">&amp;</span> input<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span> step<span class="hl opt">) {</span>
+    <span class="hl kwb">int</span> SPREAD <span class="hl opt">=</span> <span class="hl kwd">sysconf</span><span class="hl opt">(</span>_SC_NPROCESSORS_ONLN<span class="hl opt">);</span>
+
+    <span class="hl slc">// work function. We spread the work over x steps</span>
+    <span class="hl kwc">auto</span> work <span class="hl opt">= [&amp;](</span><span class="hl kwb">unsigned int</span> start<span class="hl opt">,</span> <span class="hl kwb">int</span> spread<span class="hl opt">) {</span>
+        FreqMap freqs<span class="hl opt">;</span>
+
+        <span class="hl slc">// we trade memory for speed - try disabling it</span>
+        freqs<span class="hl opt">.</span><span class="hl kwd">reserve</span><span class="hl opt">(</span>input<span class="hl opt">.</span><span class="hl kwd">size</span><span class="hl opt">()+</span><span class="hl num">1</span><span class="hl opt">-</span>step<span class="hl opt">);</span>
+
+        <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">unsigned int</span> i <span class="hl opt">=</span> start<span class="hl opt">,</span> i_end <span class="hl opt">=</span> input<span class="hl opt">.</span><span class="hl kwd">size</span><span class="hl opt">()+</span><span class="hl num">1</span><span class="hl opt">-</span>step<span class="hl opt">;</span> i<span class="hl opt">&lt;</span>i_end<span class="hl opt">;</span> i<span class="hl opt">+=</span>spread<span class="hl opt">){</span>
+            freqs<span class="hl opt">[</span>input<span class="hl opt">.</span><span class="hl kwd">substr</span><span class="hl opt">(</span>i<span class="hl opt">,</span> step<span class="hl opt">)]+=</span><span class="hl num">1</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwa">return</span> <span class="hl kwd">move</span><span class="hl opt">(</span>freqs<span class="hl opt">);</span>
+    <span class="hl opt">};</span>
+
+    <span class="hl slc">// start SPREAD threads to perform the actual work</span>
+    vector<span class="hl opt">&lt;</span>future<span class="hl opt">&lt;</span>FreqMap<span class="hl opt">&gt;&gt;</span> ft<span class="hl opt">;</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i<span class="hl opt">=</span><span class="hl num">0</span><span class="hl opt">;</span>i<span class="hl opt">&lt;</span>SPREAD<span class="hl opt">;++</span>i<span class="hl opt">) {</span>
+        ft<span class="hl opt">.</span><span class="hl kwd">push_back</span><span class="hl opt">(</span><span class="hl kwd">async</span><span class="hl opt">(</span>launch<span class="hl opt">::</span>async<span class="hl opt">,</span> work<span class="hl opt">,</span> i<span class="hl opt">,</span> SPREAD<span class="hl opt">));</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl slc">// summarize the partial sums</span>
+    FreqMap freqs <span class="hl opt">=</span> ft<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">].</span><span class="hl kwd">get</span><span class="hl opt">();</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i<span class="hl opt">=</span><span class="hl num">1</span><span class="hl opt">;</span>i<span class="hl opt">&lt;</span>SPREAD<span class="hl opt">;++</span>i<span class="hl opt">){</span>
+         <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwc">auto</span> <span class="hl opt">&amp;</span> j<span class="hl opt">:</span> ft<span class="hl opt">[</span>i<span class="hl opt">].</span><span class="hl kwd">get</span><span class="hl opt">()){</span>
+             freqs<span class="hl opt">[</span>j<span class="hl opt">.</span>first<span class="hl opt">]+=</span>j<span class="hl opt">.</span>second<span class="hl opt">;</span>
+          <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">return</span> <span class="hl kwd">move</span><span class="hl opt">(</span>freqs<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwb">void</span> <span class="hl kwd">printMap</span><span class="hl opt">(</span><span class="hl kwb">unsigned int</span> sum<span class="hl opt">,</span> FreqMap <span class="hl opt">&amp;&amp;</span> freqs<span class="hl opt">) {</span>
+    vector<span class="hl opt">&lt;</span>pair<span class="hl opt">&lt;</span>string<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span><span class="hl opt">&gt;&gt;</span> counts<span class="hl opt">;</span>
+    
+    <span class="hl slc">// we trade memory for speed - try disabling it</span>
+    counts<span class="hl opt">.</span><span class="hl kwd">reserve</span><span class="hl opt">(</span>freqs<span class="hl opt">.</span><span class="hl kwd">size</span><span class="hl opt">());</span>
+
+    <span class="hl slc">// copy everything to the vector</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwc">auto</span> <span class="hl opt">&amp;</span>i<span class="hl opt">:</span> freqs<span class="hl opt">)</span> counts<span class="hl opt">.</span><span class="hl kwd">emplace_back</span><span class="hl opt">(</span>i<span class="hl opt">.</span>first<span class="hl opt">,</span> i<span class="hl opt">.</span>second<span class="hl opt">);</span>
+
+    <span class="hl slc">// sort by count - descending</span>
+    <span class="hl kwd">sort</span><span class="hl opt">(</span>counts<span class="hl opt">.</span><span class="hl kwd">begin</span><span class="hl opt">(),</span> counts<span class="hl opt">.</span><span class="hl kwd">end</span><span class="hl opt">(),</span> 
+            <span class="hl opt">[](</span><span class="hl kwb">const</span> pair<span class="hl opt">&lt;</span>string<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span><span class="hl opt">&gt; &amp;</span>a<span class="hl opt">,</span> <span class="hl kwb">const</span> pair<span class="hl opt">&lt;</span>string<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span><span class="hl opt">&gt; &amp;</span>b<span class="hl opt">){</span>
+            <span class="hl kwa">return</span> a<span class="hl opt">.</span>second <span class="hl opt">&gt;</span> b<span class="hl opt">.</span>second<span class="hl opt">;</span>
+            <span class="hl opt">});</span>
+
+    <span class="hl slc">// print </span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwc">auto</span> <span class="hl opt">&amp;</span>i<span class="hl opt">:</span> counts<span class="hl opt">)</span>  cout <span class="hl opt">&lt;&lt;</span> i<span class="hl opt">.</span>first <span class="hl opt">&lt;&lt;</span> <span class="hl str">' '</span>  <span class="hl opt">&lt;&lt; (</span>sum ? <span class="hl kwb">double</span><span class="hl opt">(</span><span class="hl num">100</span> <span class="hl opt">*</span> i<span class="hl opt">.</span>second<span class="hl opt">) /</span> sum <span class="hl opt">:</span> <span class="hl num">0.0</span><span class="hl opt">) &lt;&lt;</span> endl<span class="hl opt">;</span>
+    std<span class="hl opt">::</span>cout <span class="hl opt">&lt;&lt;</span> <span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwc">inline</span>
+<span class="hl kwb">void</span> <span class="hl kwd">frequencies</span><span class="hl opt">(</span><span class="hl kwb">const</span> string <span class="hl opt">&amp;</span> input<span class="hl opt">,</span> <span class="hl kwb">unsigned int</span> step<span class="hl opt">) {</span>
+    <span class="hl kwd">printMap</span><span class="hl opt">(</span>input<span class="hl opt">.</span><span class="hl kwd">size</span><span class="hl opt">() +</span> <span class="hl num">1</span> <span class="hl opt">-</span> step<span class="hl opt">,</span> <span class="hl kwd">calculate_freqs</span><span class="hl opt">(</span>input<span class="hl opt">,</span> step<span class="hl opt">));</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwc">inline</span>
+<span class="hl kwb">void</span> <span class="hl kwd">counts</span><span class="hl opt">(</span><span class="hl kwb">const</span> string <span class="hl opt">&amp;</span> input<span class="hl opt">,</span> <span class="hl kwb">const</span> string <span class="hl opt">&amp;</span> fragment<span class="hl opt">) {</span>
+    <span class="hl kwc">auto</span> step <span class="hl opt">=</span> fragment<span class="hl opt">.</span><span class="hl kwd">size</span><span class="hl opt">();</span>
+    <span class="hl kwc">auto</span> freqs <span class="hl opt">=</span> <span class="hl kwd">calculate_freqs</span><span class="hl opt">(</span>input<span class="hl opt">,</span> step<span class="hl opt">);</span>
+
+    cout <span class="hl opt">&lt;&lt;</span> freqs<span class="hl opt">[</span>fragment<span class="hl opt">] &lt;&lt;</span> <span class="hl str">'</span><span class="hl esc">\t</span><span class="hl str">'</span> <span class="hl opt">&lt;&lt;</span> fragment <span class="hl opt">&lt;&lt;</span> endl<span class="hl opt">;</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwb">int</span> <span class="hl kwd">main</span><span class="hl opt">(){</span>
+    string buff<span class="hl opt">;</span>
+    string input<span class="hl opt">;</span>
+
+    <span class="hl kwa">while</span> <span class="hl opt">(</span><span class="hl kwd">getline</span><span class="hl opt">(</span>cin<span class="hl opt">,</span> buff<span class="hl opt">) &amp;&amp;</span> buff<span class="hl opt">.</span><span class="hl kwd">find</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;THREE&quot;</span><span class="hl opt">) !=</span> <span class="hl num">0</span><span class="hl opt">);</span>
+    <span class="hl kwa">while</span> <span class="hl opt">(</span><span class="hl kwd">getline</span><span class="hl opt">(</span>cin<span class="hl opt">,</span> buff<span class="hl opt">) &amp;&amp;</span> buff<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">] !=</span> <span class="hl str">'&gt;'</span><span class="hl opt">) {</span>
+        input<span class="hl opt">.</span><span class="hl kwd">append</span><span class="hl opt">(</span>buff<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwd">transform</span><span class="hl opt">(</span>input<span class="hl opt">.</span><span class="hl kwd">begin</span><span class="hl opt">(),</span>input<span class="hl opt">.</span><span class="hl kwd">end</span><span class="hl opt">(),</span>input<span class="hl opt">.</span><span class="hl kwd">begin</span><span class="hl opt">(),::</span>toupper<span class="hl opt">);</span>
+
+    cout <span class="hl opt">&lt;&lt;</span> <span class="hl kwd">setprecision</span><span class="hl opt">(</span><span class="hl num">3</span><span class="hl opt">) &lt;&lt;</span> <span class="hl kwd">setiosflags</span><span class="hl opt">(</span>ios<span class="hl opt">::</span>fixed<span class="hl opt">);</span>   
+
+    <span class="hl kwd">frequencies</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">);</span>
+    <span class="hl kwd">frequencies</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">);</span>
+    <span class="hl kwd">counts</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl str">&quot;GGT&quot;</span><span class="hl opt">);</span>
+    <span class="hl kwd">counts</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl str">&quot;GGTA&quot;</span><span class="hl opt">);</span>
+    <span class="hl kwd">counts</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl str">&quot;GGTATT&quot;</span><span class="hl opt">);</span>
+    <span class="hl kwd">counts</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATT&quot;</span><span class="hl opt">);</span>
+    <span class="hl kwd">counts</span><span class="hl opt">(</span>input<span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATTTATAGT&quot;</span><span class="hl opt">);</span>
+<span class="hl opt">}</span>
+

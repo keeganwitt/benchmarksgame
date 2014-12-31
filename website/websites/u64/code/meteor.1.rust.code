@@ -1,0 +1,517 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com">   contributed by Olof Kraigher</span>
+<span class="hl com">*/</span>
+
+<span class="hl kwc">extern</span> crate sync<span class="hl opt">;</span>
+use sync<span class="hl opt">::</span>Arc<span class="hl opt">;</span>
+
+fn <span class="hl kwd">main</span> <span class="hl opt">() {</span>
+    match <span class="hl kwd">read_args</span><span class="hl opt">() {</span>
+        <span class="hl kwd">Ok</span><span class="hl opt">(</span>num_solutions<span class="hl opt">) =&gt; {</span>
+            <span class="hl kwd">solve</span><span class="hl opt">(</span>num_solutions<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwd">Err</span><span class="hl opt">(</span>message<span class="hl opt">) =&gt; {</span>
+            println<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> message<span class="hl opt">);</span>
+            std<span class="hl opt">::</span>os<span class="hl opt">::</span><span class="hl kwd">set_exit_status</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">solve</span><span class="hl opt">(</span>num_solutions <span class="hl opt">:</span> uint<span class="hl opt">) {</span>
+    <span class="hl kwd">let</span> <span class="hl opt">(</span>min<span class="hl opt">,</span> max<span class="hl opt">,</span> num_found<span class="hl opt">) =</span> <span class="hl kwd">read_solutions</span><span class="hl opt">(</span><span class="hl kwd">spawn_solvers</span><span class="hl opt">(),</span> num_solutions<span class="hl opt">);</span>
+    println<span class="hl opt">!(</span><span class="hl str">&quot;{} solutions found</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> num_found<span class="hl opt">);</span>
+    min<span class="hl opt">.</span><span class="hl kwd">pretty_print</span><span class="hl opt">();</span>
+    max<span class="hl opt">.</span><span class="hl kwd">pretty_print</span><span class="hl opt">();</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">read_args</span><span class="hl opt">() -&gt;</span> Result<span class="hl opt">&lt;</span>uint<span class="hl opt">,</span> String<span class="hl opt">&gt; {</span>
+    let args <span class="hl opt">=</span> std<span class="hl opt">::</span>os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">();</span>
+    <span class="hl kwa">if</span> args<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">() !=</span> <span class="hl num">2</span> <span class="hl opt">{</span>
+        <span class="hl kwa">return</span> <span class="hl kwd">Err</span><span class="hl opt">(</span>format<span class="hl opt">!(</span>
+            <span class="hl str">&quot;Usage: {} num_solutions&quot;</span><span class="hl opt">,</span> 
+            args<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">)));</span>
+    <span class="hl opt">}</span>
+
+    let maybe_int <span class="hl opt">:</span> Option<span class="hl opt">&lt;</span>uint<span class="hl opt">&gt; =</span> <span class="hl kwd">from_str</span><span class="hl opt">(</span>args<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">as_slice</span><span class="hl opt">());</span>
+    <span class="hl kwa">if</span> maybe_int<span class="hl opt">.</span><span class="hl kwd">is_none</span><span class="hl opt">() {</span>
+        <span class="hl kwa">return</span> <span class="hl kwd">Err</span><span class="hl opt">(</span>format<span class="hl opt">!(</span>
+            <span class="hl str">&quot;Invalid argument '{}' cannot parse as unsigned integer&quot;</span><span class="hl opt">,</span> 
+            args<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)));</span>
+    <span class="hl opt">}</span>
+
+    let num_solutions <span class="hl opt">=</span> maybe_int<span class="hl opt">.</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+    <span class="hl kwa">if</span> num_solutions <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+        <span class="hl kwa">return</span> <span class="hl kwd">Err</span><span class="hl opt">(</span>format<span class="hl opt">!(</span>
+            <span class="hl str">&quot;Invalid argument '{}' must be greather than 0&quot;</span><span class="hl opt">,</span> 
+            args<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)));</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">return</span> <span class="hl kwd">Ok</span><span class="hl opt">(</span>num_solutions<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">read_solutions</span><span class="hl opt">(</span>solution_receiver <span class="hl opt">:</span> Receiver<span class="hl opt">&lt;</span>Solution<span class="hl opt">&gt;,</span>
+                  num_solutions <span class="hl opt">:</span> uint<span class="hl opt">)  -&gt; (</span>Solution<span class="hl opt">,</span> Solution<span class="hl opt">,</span> uint<span class="hl opt">) {</span>
+    let first <span class="hl opt">=</span> solution_receiver<span class="hl opt">.</span><span class="hl kwd">recv</span><span class="hl opt">();</span>
+    let mut num_found <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+    let mut min <span class="hl opt">=</span> first<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+    let mut max <span class="hl opt">=</span> first<span class="hl opt">;</span>
+    <span class="hl kwa">for</span> solution in solution_receiver<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">() {</span>
+        <span class="hl kwa">if</span> num_found <span class="hl opt">==</span> num_solutions <span class="hl opt">{</span>
+            <span class="hl kwa">break</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwa">if</span> solution <span class="hl opt">&lt;</span> min <span class="hl opt">{</span>
+            min <span class="hl opt">=</span> solution<span class="hl opt">;</span>
+        <span class="hl opt">}</span> <span class="hl kwa">else if</span> solution <span class="hl opt">&gt;</span> max <span class="hl opt">{</span>
+            max <span class="hl opt">=</span> solution<span class="hl opt">;</span>            
+        <span class="hl opt">}</span>
+        num_found <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl opt">(</span>min<span class="hl opt">,</span> max<span class="hl opt">,</span> num_found<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">spawn_solvers</span><span class="hl opt">() -&gt;</span> Receiver<span class="hl opt">&lt;</span>Solution<span class="hl opt">&gt; {</span>
+    let mask_lookup <span class="hl opt">=</span> Arc<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>MaskLookup<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">());</span>
+
+    <span class="hl kwd">let</span> <span class="hl opt">(</span>solution_sender<span class="hl opt">,</span> solution_receiver<span class="hl opt">) =</span> <span class="hl kwd">channel</span><span class="hl opt">();</span>
+
+    <span class="hl kwa">for</span> first_piece in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_pieces<span class="hl opt">) {</span>
+        let num_masks <span class="hl opt">=</span> mask_lookup<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>first_piece<span class="hl opt">,</span> last_position<span class="hl opt">).</span><span class="hl kwd">len</span><span class="hl opt">();</span>
+
+        <span class="hl kwa">for</span> mask_idx in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_masks<span class="hl opt">) {</span>
+            let my_solution_sender <span class="hl opt">=</span> solution_sender<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+            let my_mask_lookup <span class="hl opt">=</span> mask_lookup<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+
+            <span class="hl kwd">spawn</span><span class="hl opt">(</span><span class="hl kwd">proc</span><span class="hl opt">() {</span>
+                let mut solver <span class="hl opt">=</span> Solver<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>
+                    my_mask_lookup<span class="hl opt">.</span><span class="hl kwd">deref</span><span class="hl opt">(),</span> 
+                    <span class="hl opt">&amp;</span>my_solution_sender<span class="hl opt">);</span>
+                solver<span class="hl opt">.</span><span class="hl kwd">place_piece</span><span class="hl opt">(</span>first_piece<span class="hl opt">,</span> 
+                                   last_position<span class="hl opt">,</span> 
+                                   mask_idx<span class="hl opt">,</span> 
+                                   num_masks<span class="hl opt">);</span>
+            <span class="hl opt">});</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    solution_receiver
+<span class="hl opt">}</span>
+
+<span class="hl kwb">struct</span> Solver<span class="hl opt">&lt;</span><span class="hl str">'a&gt; {</span>
+<span class="hl str">    mask_lookup: &amp;'</span>a MaskLookup<span class="hl opt">,</span>
+    masks<span class="hl opt">: [</span>u64<span class="hl opt">, ..</span>num_pieces<span class="hl opt">],</span>
+    mask <span class="hl opt">:</span> u64<span class="hl opt">,</span>
+    used_pieces<span class="hl opt">:</span> uint<span class="hl opt">,</span>
+    solution_sender <span class="hl opt">: &amp;</span><span class="hl str">'a Sender&lt;Solution&gt;,</span>
+<span class="hl str">    solution: Solution,</span>
+<span class="hl str">    reversed_solution: Solution</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">impl&lt;'</span>a<span class="hl opt">&gt;</span> Solver<span class="hl opt">&lt;</span><span class="hl str">'a&gt; {</span>
+<span class="hl str">    fn new(mask_lookup : &amp;'</span>a MaskLookup<span class="hl opt">,</span> 
+           solution_sender <span class="hl opt">: &amp;</span><span class="hl str">'a Sender&lt;Solution&gt;) -&gt; Solver&lt;'</span>a<span class="hl opt">&gt; {</span>
+        Solver <span class="hl opt">{</span>
+            mask_lookup<span class="hl opt">:</span> mask_lookup<span class="hl opt">,</span>
+            masks<span class="hl opt">: [</span><span class="hl num">0</span><span class="hl opt">, ..</span>num_pieces<span class="hl opt">],</span>
+            mask<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">,</span>
+            used_pieces<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">,</span>
+            solution_sender<span class="hl opt">:</span> solution_sender<span class="hl opt">,</span>
+            solution<span class="hl opt">:</span> Solution<span class="hl opt">::</span><span class="hl kwa">default</span><span class="hl opt">(),</span>
+            reversed_solution<span class="hl opt">:</span> Solution<span class="hl opt">::</span><span class="hl kwa">default</span><span class="hl opt">()</span>
+        <span class="hl opt">}</span>        
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">place_piece</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> 
+                   piece <span class="hl opt">:</span> uint<span class="hl opt">,</span>
+                   position <span class="hl opt">:</span> uint<span class="hl opt">,</span>
+                   start <span class="hl opt">:</span> uint<span class="hl opt">,</span>
+                   step <span class="hl opt">:</span> uint<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span><span class="hl kwd">toggle_piece</span><span class="hl opt">(</span>piece<span class="hl opt">);</span>
+        let masks <span class="hl opt">=</span> self<span class="hl opt">.</span>mask_lookup<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>piece<span class="hl opt">,</span> position<span class="hl opt">);</span>
+        let mut idx <span class="hl opt">=</span> start<span class="hl opt">;</span>
+        <span class="hl kwa">while</span> idx <span class="hl opt">&lt;</span> masks<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">() {</span>
+            self<span class="hl opt">.</span><span class="hl kwd">evaluate</span><span class="hl opt">(</span>piece<span class="hl opt">,</span> masks<span class="hl opt">[</span>idx<span class="hl opt">]);</span>
+            idx <span class="hl opt">+=</span> step<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        self<span class="hl opt">.</span><span class="hl kwd">toggle_piece</span><span class="hl opt">(</span>piece<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">evaluate</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> piece <span class="hl opt">:</span> uint<span class="hl opt">,</span> mask <span class="hl opt">:</span> u64<span class="hl opt">) {</span>
+        <span class="hl kwa">if</span> self<span class="hl opt">.</span><span class="hl kwd">fits</span><span class="hl opt">(</span>mask<span class="hl opt">) {</span>
+            self<span class="hl opt">.</span><span class="hl kwd">place_mask</span><span class="hl opt">(</span>piece<span class="hl opt">,</span> mask<span class="hl opt">);</span>
+            <span class="hl kwa">if</span> self<span class="hl opt">.</span><span class="hl kwd">done</span><span class="hl opt">() {</span>
+                self<span class="hl opt">.</span><span class="hl kwd">send_solution</span><span class="hl opt">();</span>
+            <span class="hl opt">}</span> <span class="hl kwa">else if</span> self<span class="hl opt">.</span><span class="hl kwd">still_possible</span><span class="hl opt">() {</span>
+                self<span class="hl opt">.</span><span class="hl kwd">choose_piece</span><span class="hl opt">();</span>
+            <span class="hl opt">}</span>
+            self<span class="hl opt">.</span><span class="hl kwd">unplace_mask</span><span class="hl opt">(</span>mask<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span> 
+
+    fn <span class="hl kwd">choose_piece</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) {</span>
+        let position <span class="hl opt">=</span> self<span class="hl opt">.</span><span class="hl kwd">first_free_position</span><span class="hl opt">();</span>
+        let mut piece <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        <span class="hl kwa">while</span> piece <span class="hl opt">&lt;</span> num_pieces <span class="hl opt">{</span>
+            <span class="hl kwa">if</span> self<span class="hl opt">.</span><span class="hl kwd">is_not_placed</span><span class="hl opt">(</span>piece<span class="hl opt">) {</span>
+                self<span class="hl opt">.</span><span class="hl kwd">place_piece</span><span class="hl opt">(</span>piece<span class="hl opt">,</span> position<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+            piece <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">toggle_piece</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> piece <span class="hl opt">:</span> uint<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span>used_pieces <span class="hl opt">^=</span> <span class="hl num">1</span> <span class="hl opt">&lt;&lt;</span> piece<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">place_mask</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> piece<span class="hl opt">:</span> uint<span class="hl opt">,</span> mask <span class="hl opt">:</span> u64<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span>mask <span class="hl opt">^=</span> mask<span class="hl opt">;</span>
+        self<span class="hl opt">.</span>masks<span class="hl opt">[</span>piece<span class="hl opt">] =</span> mask<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">unplace_mask</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> mask <span class="hl opt">:</span> u64<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span>mask <span class="hl opt">^=</span> mask<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">done</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>used_pieces <span class="hl opt">== (</span><span class="hl num">1</span> <span class="hl opt">&lt;&lt;</span> num_pieces<span class="hl opt">) -</span> <span class="hl num">1</span>
+    <span class="hl opt">}</span>
+    
+    fn <span class="hl kwd">still_possible</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        <span class="hl kwd">no_islands</span><span class="hl opt">(</span>self<span class="hl opt">.</span>mask<span class="hl opt">)</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">first_free_position</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> uint <span class="hl opt">{</span>
+        <span class="hl kwd">find_first_one</span><span class="hl opt">(!</span>self<span class="hl opt">.</span>mask <span class="hl opt">&amp;</span> full_mask<span class="hl opt">)</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">is_not_placed</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> piece <span class="hl opt">:</span> uint<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>used_pieces <span class="hl opt">&amp; (</span><span class="hl num">1</span> <span class="hl opt">&lt;&lt;</span> piece<span class="hl opt">) ==</span> <span class="hl num">0</span>
+    <span class="hl opt">}</span>    
+
+    fn <span class="hl kwd">fits</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> mask <span class="hl opt">:</span> u64<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>mask <span class="hl opt">&amp;</span> mask <span class="hl opt">==</span> <span class="hl num">0</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">send_solution</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) {</span> 
+        self<span class="hl opt">.</span><span class="hl kwd">fill_solutions</span><span class="hl opt">();</span>
+        let _ <span class="hl opt">=</span> self<span class="hl opt">.</span>solution_sender<span class="hl opt">.</span><span class="hl kwd">send_opt</span><span class="hl opt">(</span>self<span class="hl opt">.</span>solution<span class="hl opt">);</span>
+        let _ <span class="hl opt">=</span> self<span class="hl opt">.</span>solution_sender<span class="hl opt">.</span><span class="hl kwd">send_opt</span><span class="hl opt">(</span>self<span class="hl opt">.</span>reversed_solution<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">fill_solutions</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) {</span>
+        <span class="hl kwa">for</span> position in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_positions<span class="hl opt">) {</span>
+            let piece <span class="hl opt">=</span> self<span class="hl opt">.</span><span class="hl kwd">piece_at_position</span><span class="hl opt">(</span>position<span class="hl opt">);</span>          
+            self<span class="hl opt">.</span>solution<span class="hl opt">.</span>pieces<span class="hl opt">[</span>position<span class="hl opt">] =</span> piece<span class="hl opt">;</span>
+            let reversed_position <span class="hl opt">=</span> last_position <span class="hl opt">-</span> position<span class="hl opt">;</span>
+            self<span class="hl opt">.</span>reversed_solution<span class="hl opt">.</span>pieces<span class="hl opt">[</span>reversed_position<span class="hl opt">] =</span> piece<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">piece_at_position</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> position <span class="hl opt">:</span> uint<span class="hl opt">) -&gt;</span> u8 <span class="hl opt">{</span>
+        let position_mask <span class="hl opt">=</span> <span class="hl num">1</span> <span class="hl opt">&lt;&lt;</span> position<span class="hl opt">;</span>
+        <span class="hl kwa">for</span> piece in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_pieces<span class="hl opt">) {</span>
+            let mask <span class="hl opt">=</span> self<span class="hl opt">.</span>masks<span class="hl opt">[</span>piece<span class="hl opt">];</span>
+            let uses_piece <span class="hl opt">= (</span>self<span class="hl opt">.</span>used_pieces <span class="hl opt">&gt;&gt;</span> piece<span class="hl opt">) &amp;</span> <span class="hl num">1</span> <span class="hl opt">==</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            let occupies_position <span class="hl opt">=</span> <span class="hl kwd">overlaps</span><span class="hl opt">(</span>mask<span class="hl opt">,</span> position_mask<span class="hl opt">);</span>
+            <span class="hl kwa">if</span> uses_piece <span class="hl opt">&amp;&amp;</span> occupies_position <span class="hl opt">{</span>
+                <span class="hl kwa">return</span> piece as u8<span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwa">return</span> <span class="hl num">0</span><span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwb">struct</span> Solution <span class="hl opt">{</span>
+    pieces<span class="hl opt">: [</span>u8<span class="hl opt">, ..</span>num_positions<span class="hl opt">]</span>
+<span class="hl opt">}</span>
+
+impl Solution <span class="hl opt">{</span>
+    fn <span class="hl kwa">default</span><span class="hl opt">() -&gt;</span> Solution <span class="hl opt">{</span>
+        Solution <span class="hl opt">{</span>
+            pieces<span class="hl opt">: [</span><span class="hl num">0</span><span class="hl opt">, ..</span>num_positions<span class="hl opt">]</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+impl Clone <span class="hl kwa">for</span> Solution <span class="hl opt">{</span>
+    fn <span class="hl kwd">clone</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> Solution <span class="hl opt">{</span>
+        Solution <span class="hl opt">{</span>
+            pieces<span class="hl opt">:</span> self<span class="hl opt">.</span>pieces
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+impl PartialOrd <span class="hl kwa">for</span> Solution <span class="hl opt">{</span>
+    fn <span class="hl kwd">lt</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> other <span class="hl opt">: &amp;</span>Solution<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>pieces <span class="hl opt">&lt;</span> other<span class="hl opt">.</span>pieces
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+impl PartialEq <span class="hl kwa">for</span> Solution <span class="hl opt">{</span>
+    fn <span class="hl kwd">eq</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> other <span class="hl opt">: &amp;</span>Solution<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>pieces <span class="hl opt">==</span> other<span class="hl opt">.</span>pieces
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+impl Solution <span class="hl opt">{</span>
+    fn <span class="hl kwd">pretty_print</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) {</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>idx<span class="hl opt">, &amp;</span>piece<span class="hl opt">)</span> in self<span class="hl opt">.</span>pieces<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">() {</span>
+            let glyph <span class="hl opt">= ((</span><span class="hl str">'0'</span> as u8<span class="hl opt">) +</span> piece<span class="hl opt">)</span> as <span class="hl kwb">char</span><span class="hl opt">;</span>
+            print<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> glyph<span class="hl opt">);</span>
+            print<span class="hl opt">!(</span><span class="hl str">&quot; &quot;</span><span class="hl opt">);</span>
+
+            let x <span class="hl opt">=</span> idx <span class="hl opt">%</span> width<span class="hl opt">;</span>
+            let y <span class="hl opt">=</span> idx <span class="hl opt">/</span> width<span class="hl opt">;</span>
+
+            <span class="hl kwa">if</span> x <span class="hl opt">==</span> width<span class="hl opt">-</span><span class="hl num">1</span> <span class="hl opt">{</span>
+                <span class="hl kwa">if</span> y<span class="hl opt">%</span><span class="hl num">2</span> <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+                    print<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\n</span> <span class="hl str">&quot;</span><span class="hl opt">);</span>
+                <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+                    print<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">);</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+        print<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwb">struct</span> MaskLookup <span class="hl opt">{</span>
+    masks_by_piece_and_position<span class="hl opt">:</span> Vec<span class="hl opt">&lt;</span>Vec<span class="hl opt">&lt;</span>u64<span class="hl opt">&gt;&gt;</span>
+<span class="hl opt">}</span>
+
+impl MaskLookup <span class="hl opt">{</span>
+    fn <span class="hl kwa">new</span><span class="hl opt">() -&gt;</span> MaskLookup <span class="hl opt">{</span>
+        let mut ml <span class="hl opt">=</span> MaskLookup<span class="hl opt">::</span><span class="hl kwa">default</span><span class="hl opt">();</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">, [</span>E<span class="hl opt">,</span> E<span class="hl opt">,</span> E<span class="hl opt">,</span> SE<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">, [</span>SE<span class="hl opt">,</span> SW<span class="hl opt">,</span> W<span class="hl opt">,</span> SW<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">, [</span>W<span class="hl opt">,</span> W<span class="hl opt">,</span> SW<span class="hl opt">,</span> SE<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">true</span><span class="hl opt">,</span>  <span class="hl num">3</span><span class="hl opt">, [</span>E<span class="hl opt">,</span> E<span class="hl opt">,</span> SW<span class="hl opt">,</span> SE<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">4</span><span class="hl opt">, [</span>NW<span class="hl opt">,</span> W<span class="hl opt">,</span> NW<span class="hl opt">,</span> SE<span class="hl opt">,</span> SW<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">5</span><span class="hl opt">, [</span>E<span class="hl opt">,</span> E<span class="hl opt">,</span>  NE<span class="hl opt">,</span> W<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">6</span><span class="hl opt">, [</span>NW<span class="hl opt">,</span> NE<span class="hl opt">,</span> NE<span class="hl opt">,</span> W<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">7</span><span class="hl opt">, [</span>NE<span class="hl opt">,</span> SE<span class="hl opt">,</span> E<span class="hl opt">,</span> NE<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">8</span><span class="hl opt">, [</span>SE<span class="hl opt">,</span> SE<span class="hl opt">,</span> E<span class="hl opt">,</span> SE<span class="hl opt">]);</span>
+        ml<span class="hl opt">.</span><span class="hl kwd">add_piece</span><span class="hl opt">(</span><span class="hl kwa">false</span><span class="hl opt">,</span> <span class="hl num">9</span><span class="hl opt">, [</span>E<span class="hl opt">,</span> NW<span class="hl opt">,</span> NW<span class="hl opt">,</span> NW<span class="hl opt">]);</span>
+        ml
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwa">default</span><span class="hl opt">() -&gt;</span> MaskLookup <span class="hl opt">{</span>
+        MaskLookup <span class="hl opt">{</span>
+            masks_by_piece_and_position<span class="hl opt">:</span> 
+                Vec<span class="hl opt">::</span><span class="hl kwd">from_fn</span><span class="hl opt">(</span>num_pieces <span class="hl opt">*</span> num_positions<span class="hl opt">,</span> 
+                             <span class="hl opt">|</span>_<span class="hl opt">|</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span><span class="hl num">2</span><span class="hl opt">*</span><span class="hl num">6</span><span class="hl opt">))</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">add_piece</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> 
+                 fully_rotated <span class="hl opt">:</span> <span class="hl kwb">bool</span><span class="hl opt">,</span>
+                 index <span class="hl opt">:</span> uint<span class="hl opt">,</span> 
+                 directions <span class="hl opt">: &amp;[</span>Direction<span class="hl opt">]) {</span>
+        let mut piece <span class="hl opt">:</span> Piece <span class="hl opt">=</span> Piece<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>directions<span class="hl opt">);</span>
+        let num_orientations <span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl num">2</span><span class="hl opt">;</span>
+        let num_rotations <span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl kwa">if</span> fully_rotated <span class="hl opt">{</span><span class="hl num">3</span><span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span><span class="hl num">6</span><span class="hl opt">};</span>
+
+        <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_orientations<span class="hl opt">) {</span>
+            <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> num_rotations<span class="hl opt">) {</span>
+                <span class="hl kwa">for</span> x in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> width as <span class="hl kwb">int</span><span class="hl opt">) {</span>
+                    <span class="hl kwa">for</span> y in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> height as <span class="hl kwb">int</span><span class="hl opt">) {</span>
+                        let position <span class="hl opt">=</span> Position<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>x<span class="hl opt">,</span>y<span class="hl opt">);</span>
+                        self<span class="hl opt">.</span><span class="hl kwd">add_piece_at_position</span><span class="hl opt">(</span>index<span class="hl opt">,</span>
+                                                   <span class="hl opt">&amp;</span>piece<span class="hl opt">,</span>
+                                                   position<span class="hl opt">);</span>
+                    <span class="hl opt">}</span>
+                <span class="hl opt">}</span>
+                piece <span class="hl opt">=</span> piece<span class="hl opt">.</span><span class="hl kwd">rotate</span><span class="hl opt">();</span>
+            <span class="hl opt">}</span>
+            piece <span class="hl opt">=</span> piece<span class="hl opt">.</span><span class="hl kwd">flip</span><span class="hl opt">();</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">add_piece_at_position</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> 
+                             index <span class="hl opt">:</span> uint<span class="hl opt">,</span>
+                             piece <span class="hl opt">: &amp;</span>Piece<span class="hl opt">,</span> 
+                             position <span class="hl opt">:</span> Position<span class="hl opt">) {</span>
+
+        match piece<span class="hl opt">.</span><span class="hl kwd">to_mask</span><span class="hl opt">(</span>position<span class="hl opt">) {</span>
+            <span class="hl kwd">Some</span><span class="hl opt">(</span>mask<span class="hl opt">) =&gt; {</span>
+                let last <span class="hl opt">=</span> <span class="hl kwd">find_first_one</span><span class="hl opt">(</span>mask<span class="hl opt">);</span>
+                let idx <span class="hl opt">=</span> index<span class="hl opt">*</span>num_positions <span class="hl opt">+</span> last<span class="hl opt">;</span>
+                self<span class="hl opt">.</span>masks_by_piece_and_position<span class="hl opt">.</span><span class="hl kwd">get_mut</span><span class="hl opt">(</span>idx<span class="hl opt">).</span><span class="hl kwd">push</span><span class="hl opt">(</span>mask<span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+            None <span class="hl opt">=&gt; ()</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn get<span class="hl opt">&lt;</span><span class="hl str">'a&gt;(&amp;'</span>a self<span class="hl opt">,</span> index <span class="hl opt">:</span> uint<span class="hl opt">,</span> position <span class="hl opt">:</span> uint<span class="hl opt">) -&gt; &amp;</span><span class="hl str">'a [u64] {</span>
+<span class="hl str">        let idx = index*num_positions + position;</span>
+<span class="hl str">        self.masks_by_piece_and_position.get(idx).as_slice()</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">#[deriving(Clone)]</span>
+<span class="hl str">struct Piece {</span>
+<span class="hl str">    directions: Vec&lt;Direction&gt;</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">impl Piece {</span>
+<span class="hl str">    fn new(directions : &amp;[Direction]) -&gt; Piece {</span>
+<span class="hl str">        Piece {</span>
+<span class="hl str">            directions: Vec::from_fn(directions.len(), |i|directions[i])</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn to_mask(&amp;self, position : Position) -&gt; Option&lt;u64&gt; {</span>
+<span class="hl str">        let mut mask = position.to_mask();</span>
+<span class="hl str">        let mut current_position = position;</span>
+<span class="hl str"></span>
+<span class="hl str">        for direction in self.directions.iter() {</span>
+<span class="hl str">            match current_position.in_direction(direction) {</span>
+<span class="hl str">                Some(position) =&gt; {</span>
+<span class="hl str">                    current_position = position;</span>
+<span class="hl str">                    mask |= current_position.to_mask();</span>
+<span class="hl str">                },</span>
+<span class="hl str">                None =&gt; return None</span>
+<span class="hl str">            }</span>
+<span class="hl str">        }</span>
+<span class="hl str">        return Piece::prune(mask);</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn prune(mask : u64) -&gt; Option&lt;u64&gt; {</span>
+<span class="hl str">        let border = 0b11111_10001_10001_10001_10001_10001_10001_10001_10001_11111;</span>
+<span class="hl str">        if mask &amp; border == 0 || no_islands(mask) {</span>
+<span class="hl str">            Some(mask)</span>
+<span class="hl str">        } else {</span>
+<span class="hl str">            None</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn flip(&amp;self) -&gt; Piece {</span>
+<span class="hl str">        self.as_modified(|x| x.flip())</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn rotate(&amp;self) -&gt; Piece {</span>
+<span class="hl str">        self.as_modified(|x| x.rotate())</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn as_modified(&amp;self, fun : |&amp;Direction| -&gt; Direction) -&gt; Piece {</span>
+<span class="hl str">        Piece {</span>
+<span class="hl str">            directions: self.directions.iter().map(fun).collect()</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">struct Position {</span>
+<span class="hl str">    x: int,</span>
+<span class="hl str">    y: int</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">impl Position {</span>
+<span class="hl str">    fn new(x : int, y : int) -&gt; Position {</span>
+<span class="hl str">        Position {x:x, y:y}</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn in_direction(&amp;self, direction : &amp;Direction) -&gt; Option&lt;Position&gt; {</span>
+<span class="hl str"></span>
+<span class="hl str">        let (dx, dy) =</span>
+<span class="hl str">            match direction {</span>
+<span class="hl str">                &amp;E =&gt; (-1, 0),</span>
+<span class="hl str">                &amp;W =&gt; ( 1, 0),</span>
+<span class="hl str">                &amp;NE =&gt; (self.y%2 - 1,  1),</span>
+<span class="hl str">                &amp;NW =&gt; (self.y%2    ,  1),</span>
+<span class="hl str">                &amp;SE =&gt; (self.y%2 - 1, -1),</span>
+<span class="hl str">                &amp;SW =&gt; (self.y%2    , -1)</span>
+<span class="hl str">            };</span>
+<span class="hl str"></span>
+<span class="hl str">        let new_position = self.in_2d_direction(dx, dy);</span>
+<span class="hl str"></span>
+<span class="hl str">        if Position::is_valid(new_position) {</span>
+<span class="hl str">            Some(new_position)</span>
+<span class="hl str">        } else {</span>
+<span class="hl str">            None</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn in_2d_direction(&amp;self, dx : int, dy : int) -&gt; Position {</span>
+<span class="hl str">        Position {</span>
+<span class="hl str">            x: self.x + dx,</span>
+<span class="hl str">            y: self.y + dy</span>
+<span class="hl str">        }                  </span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn is_valid(Position{x,y} : Position) -&gt; bool {</span>
+<span class="hl str">        0 &lt;= x &amp;&amp; x &lt; width as int &amp;&amp; 0 &lt;= y &amp;&amp; y &lt; height as int</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn to_mask(&amp;self) -&gt; u64 {</span>
+<span class="hl str">        1u64 &lt;&lt; (self.y * width as int + self.x) as uint</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">#[deriving(Clone, FromPrimitive)]</span>
+<span class="hl str">enum Direction {</span>
+<span class="hl str">    E=0, SE=1, SW=2, W=3, NW=4, NE=5</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">impl Direction {</span>
+<span class="hl str">    fn rotate(&amp;self) -&gt; Direction {</span>
+<span class="hl str">        self.as_modified(|x| (x + 1)%6)</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn flip(&amp;self) -&gt; Direction {</span>
+<span class="hl str">        self.as_modified(|x| (9 - x)%6)</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    fn as_modified(&amp;self, modifier : |int| -&gt; int) -&gt; Direction {</span>
+<span class="hl str">        FromPrimitive::from_int(modifier(*self as int)).unwrap()</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn no_islands(mask : u64) -&gt; bool {</span>
+<span class="hl str">    let allowed = !mask &amp; full_mask;</span>
+<span class="hl str">    let seed = (1 &lt;&lt; mask.trailing_zeros() as uint) - 1;</span>
+<span class="hl str">    let filled = flood_fill(seed, allowed);</span>
+<span class="hl str">    filled.count_ones() % 5 == 0</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn flood_fill(seed : u64, allowed : u64) -&gt; u64 {</span>
+<span class="hl str">    let mut filled = seed;</span>
+<span class="hl str"></span>
+<span class="hl str">    loop {</span>
+<span class="hl str">        let new_filled = grow(filled) &amp; allowed;</span>
+<span class="hl str">        if new_filled == filled {</span>
+<span class="hl str">            return filled;</span>
+<span class="hl str">        }        </span>
+<span class="hl str">        filled = new_filled;</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn find_first_one(mask : u64) -&gt; uint {</span>
+<span class="hl str">    63 - mask.leading_zeros() as uint</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn overlaps(m1 : u64, m2 : u64) -&gt; bool {</span>
+<span class="hl str">    return m1 &amp; m2 != 0u64;</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">fn grow(mask : u64) -&gt; u64 {</span>
+<span class="hl str">    let even = 0b00000_11111_00000_11111_00000_11111_00000_11111_00000_11111;</span>
+<span class="hl str">    let odd = 0b11111_00000_11111_00000_11111_00000_11111_00000_11111_00000;</span>
+<span class="hl str">    let right = 0b00001_00001_00001_00001_00001_00001_00001_00001_00001_00001;</span>
+<span class="hl str">    let left = 0b10000_10000_10000_10000_10000_10000_10000_10000_10000_10000;</span>
+<span class="hl str"></span>
+<span class="hl str">    let not_right = mask &amp; !right;</span>
+<span class="hl str">    let not_left = mask &amp; !left;</span>
+<span class="hl str">    let east = not_right&gt;&gt;1;</span>
+<span class="hl str">    let west = not_left&lt;&lt;1;</span>
+<span class="hl str">    let body = mask | (east &amp; (even&gt;&gt;1)) | (west &amp; (odd&lt;&lt;1));</span>
+<span class="hl str"></span>
+<span class="hl str">    mask | west | (body &lt;&lt; width) | east | (body &gt;&gt; width)</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str"></span>
+<span class="hl str">static num_pieces : uint = 10;</span>
+<span class="hl str">static width : uint = 5;</span>
+<span class="hl str">static height : uint = 10;</span>
+<span class="hl str">static num_positions : uint = width*height;</span>
+<span class="hl str">static last_position : uint = num_positions-1;</span>
+<span class="hl str">static full_mask : u64 = (1 &lt;&lt; num_positions) - 1;</span>

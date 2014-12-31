@@ -1,0 +1,72 @@
+<span class="hl slc">;; The Computer Language Benchmarks Game</span>
+<span class="hl slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">;; </span>
+<span class="hl slc">;; Contributed by Karel Belohlavek</span>
+<span class="hl slc">;; </span>
+<span class="hl slc">;; Single core implementation.</span>
+<span class="hl slc">;; Inspired by the Erlang one by Alkis Gotovos and Maria Christakis.</span>
+
+<span class="hl opt">(</span><span class="hl kwa">eval-when</span> <span class="hl opt">(:</span>execute<span class="hl opt">) (</span><span class="hl kwa">proclaim</span> <span class="hl opt">'(</span><span class="hl kwa">optimize</span> <span class="hl opt">(</span><span class="hl kwa">speed</span><span class="hl opt">))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defun</span> fannkuch <span class="hl opt">(</span><span class="hl kwa">n</span><span class="hl opt">)</span>
+   <span class="hl opt">(</span><span class="hl kwa">labels</span>
+    <span class="hl opt">((</span><span class="hl kwa">mkperm</span> <span class="hl opt">(</span><span class="hl kwa">n</span><span class="hl opt">)</span>
+     <span class="hl opt">(</span><span class="hl kwa">let</span><span class="hl opt">*</span>
+      <span class="hl opt">((</span><span class="hl kwa">params</span> <span class="hl opt">(</span><span class="hl kwa">loop</span> for i from <span class="hl num">1</span> to n collect <span class="hl opt">(</span><span class="hl kwa">gensym</span><span class="hl opt">)))</span>
+       <span class="hl opt">(</span><span class="hl kwa">flip-branches</span>
+         <span class="hl opt">(</span><span class="hl kwa">loop</span>
+          for j from <span class="hl num">2</span> to n
+          collect
+            <span class="hl opt">`((,</span>j<span class="hl opt">)</span>
+              <span class="hl opt">,(</span><span class="hl kwa">append</span> <span class="hl opt">'(</span><span class="hl kwa">flip</span> <span class="hl opt">(</span><span class="hl kwa">the</span> fixnum <span class="hl opt">(</span><span class="hl kwa">1</span><span class="hl opt">+</span> acc<span class="hl opt">)))</span>
+                       <span class="hl opt">(</span><span class="hl kwa">reverse</span> <span class="hl opt">(</span><span class="hl kwa">subseq</span> params <span class="hl num">0</span> j<span class="hl opt">))</span>
+                       <span class="hl opt">(</span><span class="hl kwa">subseq</span> params j<span class="hl opt">)))))</span>
+       <span class="hl opt">(</span><span class="hl kwa">nextperm-branches</span>
+         <span class="hl opt">(</span><span class="hl kwa">loop</span>
+          for j from <span class="hl num">0</span> below n
+          for rparams <span class="hl opt">= (</span><span class="hl kwa">append</span> <span class="hl opt">(</span><span class="hl kwa">subseq</span> params <span class="hl num">1</span> <span class="hl opt">(</span><span class="hl kwa">1</span><span class="hl opt">+</span> j<span class="hl opt">))</span>
+                                <span class="hl opt">(</span><span class="hl kwa">list</span> <span class="hl opt">(</span><span class="hl kwa">car</span> params<span class="hl opt">))</span>
+                                <span class="hl opt">(</span><span class="hl kwa">subseq</span> params <span class="hl opt">(</span><span class="hl kwa">1</span><span class="hl opt">+</span> j<span class="hl opt">)))</span>
+          collect
+            <span class="hl opt">`((,</span>j<span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt; (</span><span class="hl kwa">aref</span> c i<span class="hl opt">)</span> i<span class="hl opt">)</span> 
+               <span class="hl opt">(</span><span class="hl kwa">progn</span>
+                <span class="hl opt">(</span><span class="hl kwa">incf</span> <span class="hl opt">(</span><span class="hl kwa">aref</span> c i<span class="hl opt">))</span>
+                <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">((</span><span class="hl kwa">nflips</span> <span class="hl opt">(</span><span class="hl kwa">the</span> fixnum <span class="hl opt">(</span><span class="hl kwa">flip</span> <span class="hl num">0</span> <span class="hl opt">,&#64;</span>rparams<span class="hl opt">))))</span>
+                  <span class="hl opt">(</span><span class="hl kwa">declare</span> <span class="hl opt">(</span><span class="hl kwa">type</span> fixnum nflips<span class="hl opt">))</span>
+		  <span class="hl opt">(</span><span class="hl kwa">cond</span> <span class="hl opt">(</span><span class="hl kwa">even</span> <span class="hl opt">(</span><span class="hl kwa">incf</span> csum nflips<span class="hl opt">)</span>
+		              <span class="hl opt">(</span><span class="hl kwa">setf</span> even nil<span class="hl opt">))</span>
+		        <span class="hl opt">(</span><span class="hl kwa">t</span> <span class="hl opt">(</span><span class="hl kwa">decf</span> csum nflips<span class="hl opt">)</span>
+			   <span class="hl opt">(</span><span class="hl kwa">setf</span> even t<span class="hl opt">)))</span>
+                  <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&gt;</span> nflips max-flips<span class="hl opt">)</span>
+                   <span class="hl opt">(</span><span class="hl kwa">setf</span> max-flips nflips<span class="hl opt">)))</span>
+                <span class="hl opt">(</span><span class="hl kwa">perm</span> <span class="hl num">1</span> <span class="hl opt">,&#64;</span>rparams<span class="hl opt">))</span>
+               <span class="hl opt">(</span><span class="hl kwa">progn</span>
+                <span class="hl opt">(</span><span class="hl kwa">setf</span> <span class="hl opt">(</span><span class="hl kwa">aref</span> c i<span class="hl opt">)</span> <span class="hl num">0</span><span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">perm</span> <span class="hl opt">(+</span> i <span class="hl num">1</span><span class="hl opt">) ,&#64;</span>rparams<span class="hl opt">)))))))</span>
+      <span class="hl opt">`(</span><span class="hl kwa">lambda</span> <span class="hl opt">()</span>
+	<span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">((</span><span class="hl kwa">csum</span> <span class="hl num">0</span><span class="hl opt">)</span>
+	      <span class="hl opt">(</span><span class="hl kwa">max-flips</span> <span class="hl num">0</span><span class="hl opt">)</span>
+	      <span class="hl opt">(</span><span class="hl kwa">even</span> nil<span class="hl opt">)</span>
+	      <span class="hl opt">(</span><span class="hl kwa">c</span> <span class="hl opt">(</span><span class="hl kwa">make-array</span> <span class="hl opt">,</span>n <span class="hl opt">:</span>initial-element <span class="hl num">0</span> <span class="hl opt">:</span>element-type <span class="hl opt">'</span>fixnum<span class="hl opt">)))</span>
+	  <span class="hl opt">(</span><span class="hl kwa">declare</span> <span class="hl opt">(</span><span class="hl kwa">type</span> fixnum csum max-flips<span class="hl opt">)</span>
+	           <span class="hl opt">(</span><span class="hl kwa">type</span> boolean even<span class="hl opt">)</span>
+	           <span class="hl opt">(</span><span class="hl kwa">type</span> <span class="hl opt">(</span><span class="hl kwa">simple-array</span> fixnum <span class="hl opt">(,</span>n<span class="hl opt">))</span> c<span class="hl opt">))</span>
+	  <span class="hl opt">(</span><span class="hl kwa">labels</span>
+	   <span class="hl opt">((</span><span class="hl kwa">flip</span> <span class="hl opt">(</span><span class="hl kwa">acc</span> <span class="hl opt">,&#64;</span>params<span class="hl opt">)</span>
+             <span class="hl opt">(</span><span class="hl kwa">declare</span> <span class="hl opt">(</span><span class="hl kwa">type</span> fixnum acc <span class="hl opt">,&#64;</span>params<span class="hl opt">))</span>
+             <span class="hl opt">(</span><span class="hl kwa">ecase</span> <span class="hl opt">,(</span><span class="hl kwa">car</span> params<span class="hl opt">) ((</span><span class="hl kwa">1</span><span class="hl opt">)</span> acc<span class="hl opt">) ,&#64;</span>flip-branches<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">perm</span> <span class="hl opt">(</span><span class="hl kwa">i</span> <span class="hl opt">,&#64;</span>params<span class="hl opt">)</span>
+	     <span class="hl opt">(</span><span class="hl kwa">declare</span> <span class="hl opt">(</span><span class="hl kwa">type</span> fixnum i <span class="hl opt">,&#64;</span>params<span class="hl opt">))</span>
+	     <span class="hl opt">(</span><span class="hl kwa">ecase</span> i
+	       <span class="hl opt">(,</span>n <span class="hl opt">(</span><span class="hl kwa">format</span> t <span class="hl str">&quot;~s~%Pfannkuchen(~s) = ~s~%&quot;</span> csum <span class="hl opt">,</span>n max-flips<span class="hl opt">))</span>
+	       <span class="hl opt">,&#64;</span>nextperm-branches<span class="hl opt">)))</span>
+	   <span class="hl opt">(</span><span class="hl kwa">apply</span> <span class="hl opt">#'</span>perm
+	    <span class="hl num">1</span>
+	    <span class="hl opt">(</span><span class="hl kwa">loop</span> for j of-type fixnum from <span class="hl num">1</span> to <span class="hl opt">,</span>n collect j<span class="hl opt">))))))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">funcall</span> <span class="hl opt">(</span><span class="hl kwa">compile</span> nil <span class="hl opt">(</span><span class="hl kwa">mkperm</span> n<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defun</span> main <span class="hl opt">()</span>  
+  <span class="hl opt">(</span><span class="hl kwa">let</span><span class="hl opt">* ((</span><span class="hl kwa">args</span> <span class="hl opt">(</span><span class="hl kwa">cdr</span> sb-ext<span class="hl opt">:*</span>posix-argv<span class="hl opt">*))</span>
+         <span class="hl opt">(</span><span class="hl kwa">n</span> <span class="hl opt">(</span><span class="hl kwa">parse-integer</span> <span class="hl opt">(</span><span class="hl kwa">car</span> args<span class="hl opt">))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">fannkuch</span> n<span class="hl opt">)))</span>

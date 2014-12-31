@@ -1,0 +1,168 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by TeXitoi </span>
+
+<span class="hl ppc">#![feature(macro_rules)]</span>
+<span class="hl ppc">#![feature(simd)]</span>
+<span class="hl ppc">#![allow(experimental)]</span>
+
+<span class="hl slc">// ignore-pretty very bad with line comments</span>
+
+use std<span class="hl opt">::</span>io<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>os<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>simd<span class="hl opt">::</span>f64x2<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>sync<span class="hl opt">::{</span>Arc<span class="hl opt">,</span> Future<span class="hl opt">};</span>
+
+<span class="hl kwb">static</span> ITER<span class="hl opt">:</span> <span class="hl kwb">int</span> <span class="hl opt">=</span> <span class="hl num">50</span><span class="hl opt">;</span>
+<span class="hl kwb">static</span> LIMIT<span class="hl opt">:</span> f64 <span class="hl opt">=</span> <span class="hl num">2.0</span><span class="hl opt">;</span>
+<span class="hl kwb">static</span> WORKERS<span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl num">16</span><span class="hl opt">;</span>
+
+<span class="hl ppc">#[inline(always)]</span>
+fn mandelbrot<span class="hl opt">&lt;</span>W<span class="hl opt">:</span> io<span class="hl opt">::</span>Writer<span class="hl opt">&gt;(</span>w<span class="hl opt">:</span> uint<span class="hl opt">,</span> mut out<span class="hl opt">:</span> W<span class="hl opt">) -&gt;</span> io<span class="hl opt">::</span>IoResult<span class="hl opt">&lt;()&gt; {</span>
+    <span class="hl kwa">assert</span><span class="hl opt">!(</span>WORKERS <span class="hl opt">%</span> <span class="hl num">2</span> <span class="hl opt">==</span> <span class="hl num">0</span><span class="hl opt">);</span>
+
+    <span class="hl slc">// Ensure w and h are multiples of 8.</span>
+    let w <span class="hl opt">= (</span>w <span class="hl opt">+</span> <span class="hl num">7</span><span class="hl opt">) /</span> <span class="hl num">8</span> <span class="hl opt">*</span> <span class="hl num">8</span><span class="hl opt">;</span>
+    let h <span class="hl opt">=</span> w<span class="hl opt">;</span>
+
+    let chunk_size <span class="hl opt">=</span> h <span class="hl opt">/</span> WORKERS<span class="hl opt">;</span>
+
+    <span class="hl slc">// Account for remainders in workload division, e.g. 1000 / 16 = 62.5</span>
+    let first_chunk_size <span class="hl opt">=</span> <span class="hl kwa">if</span> h <span class="hl opt">%</span> WORKERS <span class="hl opt">!=</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+        chunk_size <span class="hl opt">+</span> h <span class="hl opt">%</span> WORKERS
+    <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+        chunk_size
+    <span class="hl opt">};</span>
+
+    <span class="hl slc">// precalc values</span>
+    let inverse_w_doubled <span class="hl opt">=</span> <span class="hl num">2.0</span> <span class="hl opt">/</span> w as f64<span class="hl opt">;</span>
+    let inverse_h_doubled <span class="hl opt">=</span> <span class="hl num">2.0</span> <span class="hl opt">/</span> h as f64<span class="hl opt">;</span>
+    let v_inverses <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span>inverse_w_doubled<span class="hl opt">,</span> inverse_h_doubled<span class="hl opt">);</span>
+    let v_consts <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span><span class="hl num">1.5</span><span class="hl opt">,</span> <span class="hl num">1.0</span><span class="hl opt">);</span>
+
+    <span class="hl slc">// A lot of this code assumes this (so do other lang benchmarks)</span>
+    <span class="hl kwa">assert</span><span class="hl opt">!(</span>w <span class="hl opt">==</span> h<span class="hl opt">);</span>
+    let mut precalc_r <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span>w<span class="hl opt">);</span>
+    let mut precalc_i <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span>h<span class="hl opt">);</span>
+
+    let precalc_futures <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_fn</span><span class="hl opt">(</span>WORKERS<span class="hl opt">, |</span>i<span class="hl opt">| {</span>
+        Future<span class="hl opt">::</span><span class="hl kwd">spawn</span><span class="hl opt">(</span><span class="hl kwd">proc</span> <span class="hl opt">() {</span>
+            let mut rs <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span>w <span class="hl opt">/</span> WORKERS<span class="hl opt">);</span>
+            let mut is <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span>w <span class="hl opt">/</span> WORKERS<span class="hl opt">);</span>
+
+            let start <span class="hl opt">=</span> i <span class="hl opt">*</span> chunk_size<span class="hl opt">;</span>
+            let end <span class="hl opt">=</span> <span class="hl kwa">if</span> i <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+                first_chunk_size
+            <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+                <span class="hl opt">(</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) *</span> chunk_size
+            <span class="hl opt">};</span>
+
+            <span class="hl slc">// This assumes w == h</span>
+            <span class="hl kwa">for</span> x in <span class="hl kwd">range</span><span class="hl opt">(</span>start<span class="hl opt">,</span> end<span class="hl opt">) {</span>
+                let xf <span class="hl opt">=</span> x as f64<span class="hl opt">;</span>
+                let xy <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span>xf<span class="hl opt">,</span> xf<span class="hl opt">);</span>
+
+                let <span class="hl kwd">f64x2</span><span class="hl opt">(</span>r<span class="hl opt">,</span> i<span class="hl opt">) =</span> xy <span class="hl opt">*</span> v_inverses <span class="hl opt">-</span> v_consts<span class="hl opt">;</span>
+                rs<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>r<span class="hl opt">);</span>
+                is<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>i<span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+
+            <span class="hl opt">(</span>rs<span class="hl opt">,</span> is<span class="hl opt">)</span>
+        <span class="hl opt">})</span>
+    <span class="hl opt">});</span>
+
+    <span class="hl kwa">for</span> res in precalc_futures<span class="hl opt">.</span><span class="hl kwd">move_iter</span><span class="hl opt">() {</span>
+        <span class="hl kwd">let</span> <span class="hl opt">(</span>rs<span class="hl opt">,</span> is<span class="hl opt">) =</span> res<span class="hl opt">.</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+        precalc_r<span class="hl opt">.</span><span class="hl kwd">push_all_move</span><span class="hl opt">(</span>rs<span class="hl opt">);</span>
+        precalc_i<span class="hl opt">.</span><span class="hl kwd">push_all_move</span><span class="hl opt">(</span>is<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    assert_eq<span class="hl opt">!(</span>precalc_r<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">(),</span> w<span class="hl opt">);</span>
+    assert_eq<span class="hl opt">!(</span>precalc_i<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">(),</span> h<span class="hl opt">);</span>
+
+    let arc_init_r <span class="hl opt">=</span> Arc<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>precalc_r<span class="hl opt">);</span>
+    let arc_init_i <span class="hl opt">=</span> Arc<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>precalc_i<span class="hl opt">);</span>
+
+    let data <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_fn</span><span class="hl opt">(</span>WORKERS<span class="hl opt">, |</span>i<span class="hl opt">| {</span>
+        let vec_init_r <span class="hl opt">=</span> arc_init_r<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+        let vec_init_i <span class="hl opt">=</span> arc_init_i<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+
+        Future<span class="hl opt">::</span><span class="hl kwd">spawn</span><span class="hl opt">(</span><span class="hl kwd">proc</span> <span class="hl opt">() {</span>
+            let mut res<span class="hl opt">:</span> Vec<span class="hl opt">&lt;</span>u8<span class="hl opt">&gt; =</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">((</span>chunk_size <span class="hl opt">*</span> w<span class="hl opt">) /</span> <span class="hl num">8</span><span class="hl opt">);</span>
+            let init_r_slice <span class="hl opt">=</span> vec_init_r<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">();</span>
+            <span class="hl kwa">for</span> <span class="hl opt">&amp;</span>init_i in vec_init_i<span class="hl opt">.</span><span class="hl kwd">slice</span><span class="hl opt">(</span>i <span class="hl opt">*</span> chunk_size<span class="hl opt">, (</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) *</span> chunk_size<span class="hl opt">).</span><span class="hl kwd">iter</span><span class="hl opt">() {</span>
+                <span class="hl kwd">write_line</span><span class="hl opt">(</span>init_i<span class="hl opt">,</span> init_r_slice<span class="hl opt">, &amp;</span>mut res<span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+
+            res
+        <span class="hl opt">})</span>
+    <span class="hl opt">});</span>
+
+    <span class="hl kwa">try</span><span class="hl opt">!(</span>writeln<span class="hl opt">!(&amp;</span>mut out as <span class="hl opt">&amp;</span>mut Writer<span class="hl opt">,</span> <span class="hl str">&quot;P4</span><span class="hl esc">\n</span><span class="hl str">{} {}&quot;</span><span class="hl opt">,</span> w<span class="hl opt">,</span> h<span class="hl opt">));</span>
+    <span class="hl kwa">for</span> res in data<span class="hl opt">.</span><span class="hl kwd">move_iter</span><span class="hl opt">() {</span>
+        <span class="hl kwa">try</span><span class="hl opt">!(</span>out<span class="hl opt">.</span><span class="hl kwd">write</span><span class="hl opt">(</span>res<span class="hl opt">.</span><span class="hl kwd">unwrap</span><span class="hl opt">().</span><span class="hl kwd">as_slice</span><span class="hl opt">()));</span>
+    <span class="hl opt">}</span>
+    out<span class="hl opt">.</span><span class="hl kwd">flush</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">write_line</span><span class="hl opt">(</span>init_i<span class="hl opt">:</span> f64<span class="hl opt">,</span> vec_init_r<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> res<span class="hl opt">: &amp;</span>mut Vec<span class="hl opt">&lt;</span>u8<span class="hl opt">&gt;) {</span>
+    let v_init_i <span class="hl opt">:</span> f64x2 <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span>init_i<span class="hl opt">,</span> init_i<span class="hl opt">);</span>
+    let v_2 <span class="hl opt">:</span> f64x2 <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span><span class="hl num">2.0</span><span class="hl opt">,</span> <span class="hl num">2.0</span><span class="hl opt">);</span>
+    <span class="hl kwb">static</span> LIMIT_SQUARED<span class="hl opt">:</span> f64 <span class="hl opt">=</span> LIMIT <span class="hl opt">*</span> LIMIT<span class="hl opt">;</span>
+
+    <span class="hl kwa">for</span> chunk_init_r in vec_init_r<span class="hl opt">.</span><span class="hl kwd">chunks</span><span class="hl opt">(</span><span class="hl num">8</span><span class="hl opt">) {</span>
+        let mut cur_byte <span class="hl opt">=</span> <span class="hl num">0xff</span><span class="hl opt">;</span>
+        let mut i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+        <span class="hl kwa">while</span> i <span class="hl opt">&lt;</span> <span class="hl num">8</span> <span class="hl opt">{</span>
+            let v_init_r <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span>chunk_init_r<span class="hl opt">[</span>i<span class="hl opt">],</span> chunk_init_r<span class="hl opt">[</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">]);</span>
+            let mut cur_r <span class="hl opt">=</span> v_init_r<span class="hl opt">;</span>
+            let mut cur_i <span class="hl opt">=</span> v_init_i<span class="hl opt">;</span>
+            let mut r_sq <span class="hl opt">=</span> v_init_r <span class="hl opt">*</span> v_init_r<span class="hl opt">;</span>
+            let mut i_sq <span class="hl opt">=</span> v_init_i <span class="hl opt">*</span> v_init_i<span class="hl opt">;</span>
+
+            let mut b <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> ITER<span class="hl opt">) {</span>
+                let r <span class="hl opt">=</span> cur_r<span class="hl opt">;</span>
+                let i <span class="hl opt">=</span> cur_i<span class="hl opt">;</span>
+
+                cur_i <span class="hl opt">=</span> v_2 <span class="hl opt">*</span> r <span class="hl opt">*</span> i <span class="hl opt">+</span> v_init_i<span class="hl opt">;</span>
+                cur_r <span class="hl opt">=</span> r_sq <span class="hl opt">-</span> i_sq <span class="hl opt">+</span> v_init_r<span class="hl opt">;</span>
+
+                let <span class="hl kwd">f64x2</span><span class="hl opt">(</span>bit1<span class="hl opt">,</span> bit2<span class="hl opt">) =</span> r_sq <span class="hl opt">+</span> i_sq<span class="hl opt">;</span>
+
+                <span class="hl kwa">if</span> bit1 <span class="hl opt">&gt;</span> LIMIT_SQUARED <span class="hl opt">{</span>
+                    b <span class="hl opt">|=</span> <span class="hl num">2</span><span class="hl opt">;</span>
+                    <span class="hl kwa">if</span> b <span class="hl opt">==</span> <span class="hl num">3</span> <span class="hl opt">{</span> <span class="hl kwa">break</span><span class="hl opt">; }</span>
+                <span class="hl opt">}</span>
+
+                <span class="hl kwa">if</span> bit2 <span class="hl opt">&gt;</span> LIMIT_SQUARED <span class="hl opt">{</span>
+                    b <span class="hl opt">|=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                    <span class="hl kwa">if</span> b <span class="hl opt">==</span> <span class="hl num">3</span> <span class="hl opt">{</span> <span class="hl kwa">break</span><span class="hl opt">; }</span>
+                <span class="hl opt">}</span>
+
+                r_sq <span class="hl opt">=</span> cur_r <span class="hl opt">*</span> cur_r<span class="hl opt">;</span>
+                i_sq <span class="hl opt">=</span> cur_i <span class="hl opt">*</span> cur_i<span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+
+            cur_byte <span class="hl opt">= (</span>cur_byte <span class="hl opt">&lt;&lt;</span> <span class="hl num">2</span><span class="hl opt">) +</span> b<span class="hl opt">;</span>
+            i <span class="hl opt">+=</span> <span class="hl num">2</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        res<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>cur_byte<span class="hl opt">^-</span><span class="hl num">1</span><span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let args <span class="hl opt">=</span> os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">();</span>
+    let args <span class="hl opt">=</span> args<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">();</span>
+    let res <span class="hl opt">=</span> <span class="hl kwa">if</span> args<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">() &lt;</span> <span class="hl num">2</span> <span class="hl opt">{</span>
+        println<span class="hl opt">!(</span><span class="hl str">&quot;Test mode: do not dump the image because it's not utf8, \</span>
+<span class="hl str">                  which interferes with the test runner.&quot;</span><span class="hl opt">);</span>
+        <span class="hl kwd">mandelbrot</span><span class="hl opt">(</span><span class="hl num">1000</span><span class="hl opt">,</span> io<span class="hl opt">::</span>util<span class="hl opt">::</span>NullWriter<span class="hl opt">)</span>
+    <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+        <span class="hl kwd">mandelbrot</span><span class="hl opt">(</span><span class="hl kwd">from_str</span><span class="hl opt">(</span>args<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">].</span><span class="hl kwd">as_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">(),</span> io<span class="hl opt">::</span><span class="hl kwd">stdout</span><span class="hl opt">())</span>
+    <span class="hl opt">};</span>
+    res<span class="hl opt">.</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+<span class="hl opt">}</span>

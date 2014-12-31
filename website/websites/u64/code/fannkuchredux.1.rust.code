@@ -1,0 +1,70 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by TeXitoi </span>
+
+use std<span class="hl opt">::</span>cmp<span class="hl opt">::</span>max<span class="hl opt">;</span>
+
+fn <span class="hl kwd">fact</span><span class="hl opt">(</span>n<span class="hl opt">:</span> uint<span class="hl opt">) -&gt;</span> uint <span class="hl opt">{</span>
+    <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,</span> n <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">fold</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">, |</span>accu<span class="hl opt">,</span> i<span class="hl opt">|</span> accu <span class="hl opt">*</span> i<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">fannkuch</span><span class="hl opt">(</span>n<span class="hl opt">:</span> uint<span class="hl opt">,</span> i<span class="hl opt">:</span> uint<span class="hl opt">) -&gt; (</span><span class="hl kwb">int</span><span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">) {</span>
+    let mut perm <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_fn</span><span class="hl opt">(</span>n<span class="hl opt">, |</span>e<span class="hl opt">| ((</span>n <span class="hl opt">+</span> e <span class="hl opt">-</span> i<span class="hl opt">) %</span> n <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">)</span> as i32<span class="hl opt">);</span>
+    let mut tperm <span class="hl opt">=</span> perm<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+    let mut count <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_elem</span><span class="hl opt">(</span>n<span class="hl opt">,</span> <span class="hl num">0u</span><span class="hl opt">);</span>
+    let mut perm_count <span class="hl opt">=</span> <span class="hl num">0</span>i<span class="hl opt">;</span>
+    let mut checksum <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+    <span class="hl kwa">for</span> countdown in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,</span> <span class="hl kwd">fact</span><span class="hl opt">(</span>n <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">) +</span> <span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">rev</span><span class="hl opt">() {</span>
+        <span class="hl kwa">for</span> i in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,</span> n<span class="hl opt">) {</span>
+            let perm0 <span class="hl opt">= *</span>perm<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">);</span>
+            <span class="hl kwa">for</span> j in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> i<span class="hl opt">) {</span>
+                <span class="hl opt">*</span>perm<span class="hl opt">.</span><span class="hl kwd">get_mut</span><span class="hl opt">(</span>j<span class="hl opt">) = *</span>perm<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>j <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+            <span class="hl opt">*</span>perm<span class="hl opt">.</span><span class="hl kwd">get_mut</span><span class="hl opt">(</span>i<span class="hl opt">) =</span> perm0<span class="hl opt">;</span>
+
+            let count_i <span class="hl opt">=</span> count<span class="hl opt">.</span><span class="hl kwd">get_mut</span><span class="hl opt">(</span>i<span class="hl opt">);</span>
+            <span class="hl kwa">if</span> <span class="hl opt">*</span>count_i <span class="hl opt">&gt;=</span> i <span class="hl opt">{</span>
+                <span class="hl opt">*</span>count_i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+            <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+                <span class="hl opt">*</span>count_i <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                <span class="hl kwa">break</span><span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+
+        tperm<span class="hl opt">.</span><span class="hl kwd">clone_from</span><span class="hl opt">(&amp;</span>perm<span class="hl opt">);</span>
+        let mut flips_count <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        loop <span class="hl opt">{</span>
+            let k <span class="hl opt">= *</span>tperm<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">);</span>
+            <span class="hl kwa">if</span> k <span class="hl opt">==</span> <span class="hl num">1</span> <span class="hl opt">{</span> <span class="hl kwa">break</span><span class="hl opt">; }</span>
+            tperm<span class="hl opt">.</span><span class="hl kwd">mut_slice_to</span><span class="hl opt">(</span>k as uint<span class="hl opt">).</span><span class="hl kwd">reverse</span><span class="hl opt">();</span>
+            flips_count <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        perm_count <span class="hl opt">=</span> <span class="hl kwd">max</span><span class="hl opt">(</span>perm_count<span class="hl opt">,</span> flips_count<span class="hl opt">);</span>
+        checksum <span class="hl opt">+=</span> <span class="hl kwa">if</span> countdown <span class="hl opt">&amp;</span> <span class="hl num">1</span> <span class="hl opt">==</span> <span class="hl num">1</span> <span class="hl opt">{</span>flips_count<span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{-</span>flips_count<span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    <span class="hl opt">(</span>checksum<span class="hl opt">,</span> perm_count<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let n <span class="hl opt">=</span> std<span class="hl opt">::</span>os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">().</span><span class="hl kwd">as_slice</span><span class="hl opt">()</span>
+                           <span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)</span>
+                           <span class="hl opt">.</span><span class="hl kwd">and_then</span><span class="hl opt">(|</span>arg<span class="hl opt">|</span> <span class="hl kwd">from_str</span><span class="hl opt">(</span>arg<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">()))</span>
+                           <span class="hl opt">.</span><span class="hl kwd">unwrap_or</span><span class="hl opt">(</span><span class="hl num">2u</span><span class="hl opt">);</span>
+
+    <span class="hl kwd">let</span> <span class="hl opt">(</span>tx<span class="hl opt">,</span> rx<span class="hl opt">) =</span> <span class="hl kwd">channel</span><span class="hl opt">();</span>
+    <span class="hl kwa">for</span> i in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> n<span class="hl opt">) {</span>
+        let tx <span class="hl opt">=</span> tx<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+        <span class="hl kwd">spawn</span><span class="hl opt">(</span><span class="hl kwd">proc</span><span class="hl opt">()</span> tx<span class="hl opt">.</span><span class="hl kwd">send</span><span class="hl opt">(</span><span class="hl kwd">fannkuch</span><span class="hl opt">(</span>n<span class="hl opt">,</span> i<span class="hl opt">)));</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwd">drop</span><span class="hl opt">(</span>tx<span class="hl opt">);</span>
+
+    let mut checksum <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+    let mut perm <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>cur_cks<span class="hl opt">,</span> cur_perm<span class="hl opt">)</span> in rx<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">() {</span>
+        checksum <span class="hl opt">+=</span> cur_cks<span class="hl opt">;</span>
+        perm <span class="hl opt">=</span> <span class="hl kwd">max</span><span class="hl opt">(</span>perm<span class="hl opt">,</span> cur_perm<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+    println<span class="hl opt">!(</span><span class="hl str">&quot;{}</span><span class="hl esc">\n</span><span class="hl str">Pfannkuchen({}) = {}&quot;</span><span class="hl opt">,</span> checksum<span class="hl opt">,</span> n<span class="hl opt">,</span> perm<span class="hl opt">);</span>
+<span class="hl opt">}</span>

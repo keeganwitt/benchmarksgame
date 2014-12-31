@@ -1,0 +1,181 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"></span>
+<span class="hl com">   contributed by Rex Kerr</span>
+<span class="hl com">   based partially on Java solution by Jason Nordwick</span>
+<span class="hl com">*/</span>
+
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>util<span class="hl opt">.</span>regex<span class="hl opt">.</span>_
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>util<span class="hl opt">.</span>concurrent<span class="hl opt">.</span>_
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>util<span class="hl opt">.</span>Arrays<span class="hl opt">.{</span>copyOfRange <span class="hl opt">=&gt;</span> dup<span class="hl opt">}</span>
+
+<span class="hl slc">// We won't be needing subsequences</span>
+<span class="hl kwa">trait</span> CS <span class="hl kwa">extends</span> CharSequence <span class="hl opt">{</span>
+  <span class="hl kwa">def</span> <span class="hl kwd">subSequence</span><span class="hl opt">(</span>i0<span class="hl opt">:</span> Int<span class="hl opt">,</span> i1<span class="hl opt">:</span> Int<span class="hl opt">) =</span> ???
+<span class="hl opt">}</span>
+
+<span class="hl slc">// A byte-array-backed CharSequence (i.e. like a String)</span>
+<span class="hl kwa">class</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span><span class="hl kwa">val</span> buf<span class="hl opt">:</span> Array<span class="hl opt">[</span>Byte<span class="hl opt">])(</span><span class="hl kwa">var</span> length<span class="hl opt">:</span> Int <span class="hl opt">=</span> buf<span class="hl opt">.</span>length<span class="hl opt">)</span> <span class="hl kwa">extends</span> CS <span class="hl opt">{</span>
+  <span class="hl kwa">def</span> <span class="hl kwd">charAt</span><span class="hl opt">(</span>i<span class="hl opt">:</span> Int<span class="hl opt">) =</span> <span class="hl kwd">buf</span><span class="hl opt">(</span>i<span class="hl opt">).</span>toChar
+  <span class="hl kwa">def</span> <span class="hl opt">++=(</span>arr<span class="hl opt">:</span> Array<span class="hl opt">[</span>Byte<span class="hl opt">],</span> i0<span class="hl opt">:</span> Int<span class="hl opt">,</span> i1<span class="hl opt">:</span> Int<span class="hl opt">):</span> ByteCS <span class="hl opt">= {</span>
+    <span class="hl kwa">val</span> ans <span class="hl opt">= {</span> <span class="hl kwa">if</span> <span class="hl opt">(</span>length<span class="hl opt">+</span>i1<span class="hl opt">-</span>i0 <span class="hl opt">&lt;</span> buf<span class="hl opt">.</span>length<span class="hl opt">)</span> <span class="hl kwa">this else new</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span><span class="hl kwd">dup</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> buf<span class="hl opt">.</span>length<span class="hl opt">*</span><span class="hl num">2</span><span class="hl opt">))(</span>length<span class="hl opt">) }</span>
+    <span class="hl kwa">var</span> i <span class="hl opt">=</span> i0
+    <span class="hl kwa">var</span> j <span class="hl opt">=</span> ans<span class="hl opt">.</span>length
+    <span class="hl kwa">while</span> <span class="hl opt">(</span>i <span class="hl opt">&lt;</span> i1<span class="hl opt">) {</span> ans<span class="hl opt">.</span><span class="hl kwd">buf</span><span class="hl opt">(</span>j<span class="hl opt">) =</span> <span class="hl kwd">arr</span><span class="hl opt">(</span>i<span class="hl opt">);</span> j <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">+=</span> <span class="hl num">1</span> <span class="hl opt">}</span>
+    ans<span class="hl opt">.</span>length <span class="hl opt">=</span> j
+    ans
+  <span class="hl opt">}</span>
+  <span class="hl kwa">override def</span> toString <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">String</span><span class="hl opt">(</span>buf<span class="hl opt">,</span><span class="hl num">0</span><span class="hl opt">,</span>length<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">// A &quot;string&quot; made from a bunch of byte arrays</span>
+<span class="hl kwa">class</span> <span class="hl kwd">MegaCS</span><span class="hl opt">(</span><span class="hl kwa">val</span> bcs<span class="hl opt">:</span> Array<span class="hl opt">[</span>ByteCS<span class="hl opt">])</span> <span class="hl kwa">extends</span> CS <span class="hl opt">{</span>
+  <span class="hl kwa">def</span> <span class="hl kwd">charAt</span><span class="hl opt">(</span>i<span class="hl opt">:</span> Int<span class="hl opt">) = {</span>
+    <span class="hl kwa">var</span> j <span class="hl opt">=</span> i
+    <span class="hl kwa">var</span> k <span class="hl opt">=</span> <span class="hl num">0</span>
+    <span class="hl kwa">while</span> <span class="hl opt">(</span>j <span class="hl opt">&gt;=</span> <span class="hl kwd">bcs</span><span class="hl opt">(</span>k<span class="hl opt">).</span>length<span class="hl opt">) {</span> j <span class="hl opt">-=</span> <span class="hl kwd">bcs</span><span class="hl opt">(</span>k<span class="hl opt">).</span>length<span class="hl opt">;</span> k <span class="hl opt">+=</span> <span class="hl num">1</span> <span class="hl opt">}</span>
+    <span class="hl kwd">bcs</span><span class="hl opt">(</span>k<span class="hl opt">).</span><span class="hl kwd">charAt</span><span class="hl opt">(</span>j<span class="hl opt">)</span>
+  <span class="hl opt">}</span>
+  <span class="hl kwa">def</span> length <span class="hl opt">=</span> bcs<span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>_<span class="hl opt">.</span>length<span class="hl opt">).</span>sum
+  <span class="hl kwa">override def</span> toString <span class="hl opt">=</span> bcs<span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>_<span class="hl opt">.</span>toString<span class="hl opt">).</span>mkString
+<span class="hl opt">}</span>
+
+<span class="hl slc">// Represents work to complete</span>
+<span class="hl kwa">trait</span> Work <span class="hl opt">{</span>
+  <span class="hl kwa">def</span> run<span class="hl opt">:</span> Seq<span class="hl opt">[</span>Work<span class="hl opt">]</span>
+  <span class="hl kwa">def</span> pri<span class="hl opt">:</span> Int
+<span class="hl opt">}</span>
+<span class="hl kwa">object</span> Done <span class="hl kwa">extends</span> Work <span class="hl opt">{</span>
+  <span class="hl kwa">def</span> run <span class="hl opt">=</span> <span class="hl kwd">Seq</span><span class="hl opt">(</span>Done<span class="hl opt">)</span>
+  <span class="hl kwa">def</span> pri <span class="hl opt">=</span> Int<span class="hl opt">.</span>MaxValue
+<span class="hl opt">}</span>
+
+<span class="hl kwa">object</span> regexdna <span class="hl opt">{</span>
+  <span class="hl kwa">val</span> cores <span class="hl opt">=</span> java<span class="hl opt">.</span>lang<span class="hl opt">.</span>Runtime<span class="hl opt">.</span>getRuntime<span class="hl opt">.</span>availableProcessors
+
+  <span class="hl slc">// Runs &amp; collects jobs</span>
+  <span class="hl kwa">def</span> <span class="hl kwd">doWork</span><span class="hl opt">(</span>works<span class="hl opt">:</span> Seq<span class="hl opt">[</span>Work<span class="hl opt">]) {</span>
+    <span class="hl kwa">val</span> pri <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">PriorityBlockingQueue</span><span class="hl opt">(</span><span class="hl num">12</span><span class="hl opt">,</span> <span class="hl kwa">new</span> java<span class="hl opt">.</span>util<span class="hl opt">.</span>Comparator<span class="hl opt">[</span>Work<span class="hl opt">] {</span>
+      <span class="hl kwa">def</span> <span class="hl kwd">compare</span><span class="hl opt">(</span>w<span class="hl opt">:</span> Work<span class="hl opt">,</span> v<span class="hl opt">:</span> Work<span class="hl opt">) =</span> w<span class="hl opt">.</span>pri compare v<span class="hl opt">.</span>pri
+    <span class="hl opt">})</span>
+    works<span class="hl opt">.</span><span class="hl kwd">foreach</span><span class="hl opt">(</span>pri put _<span class="hl opt">)</span>
+    <span class="hl kwa">val</span> complete <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">CountDownLatch</span><span class="hl opt">(</span>cores<span class="hl opt">)</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>i <span class="hl opt">&lt;-</span> <span class="hl num">0</span> until cores<span class="hl opt">) {</span>
+      <span class="hl kwa">val</span> t <span class="hl opt">=</span> <span class="hl kwa">new</span> Thread <span class="hl opt">{</span> <span class="hl kwa">override def</span> <span class="hl kwd">run</span><span class="hl opt">() {</span>
+        <span class="hl kwa">var</span> w<span class="hl opt">:</span> Work <span class="hl opt">=</span> null
+        <span class="hl kwa">while</span> <span class="hl opt">(</span>w ne Done<span class="hl opt">) {</span>
+          w <span class="hl opt">=</span> pri<span class="hl opt">.</span>take
+          w<span class="hl opt">.</span>run<span class="hl opt">.</span>foreach<span class="hl opt">{</span> pri<span class="hl opt">.</span>put <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+        pri<span class="hl opt">.</span><span class="hl kwd">put</span><span class="hl opt">(</span>Done<span class="hl opt">)</span>
+        complete<span class="hl opt">.</span>countDown
+      <span class="hl opt">}}</span>
+      t<span class="hl opt">.</span>start
+    <span class="hl opt">}</span>
+    complete<span class="hl opt">.</span><span class="hl kwd">await</span><span class="hl opt">()</span>
+  <span class="hl opt">}</span>
+
+  <span class="hl kwa">def</span> <span class="hl kwd">main</span><span class="hl opt">(</span>args <span class="hl opt">:</span> Array<span class="hl opt">[</span>String<span class="hl opt">]) {</span>
+    <span class="hl slc">// load data from stdin</span>
+    <span class="hl kwa">val</span> init <span class="hl opt">= {</span>
+      <span class="hl kwa">import</span> java<span class="hl opt">.</span>io<span class="hl opt">.</span>_
+      <span class="hl kwa">import</span> java<span class="hl opt">.</span>nio<span class="hl opt">.</span>ByteBuffer
+      <span class="hl kwa">val in</span> <span class="hl opt">= (</span><span class="hl kwa">new</span> <span class="hl kwd">FileInputStream</span><span class="hl opt">(</span>FileDescriptor<span class="hl opt">.</span><span class="hl kwa">in</span><span class="hl opt">)).</span>getChannel
+      <span class="hl kwa">val</span> bb <span class="hl opt">=</span> ByteBuffer<span class="hl opt">.</span><span class="hl kwd">allocate</span><span class="hl opt">(</span><span class="hl kwa">in</span><span class="hl opt">.</span>size<span class="hl opt">.</span>toInt<span class="hl opt">)</span>
+      <span class="hl kwa">in</span><span class="hl opt">.</span><span class="hl kwd">read</span><span class="hl opt">(</span>bb<span class="hl opt">)</span>
+      <span class="hl kwa">new</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span>bb<span class="hl opt">.</span>array<span class="hl opt">)()</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl slc">// strip header &amp; newline</span>
+    <span class="hl kwa">val</span> input <span class="hl opt">= {</span>
+      <span class="hl kwa">var</span> bcs <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span><span class="hl kwa">new</span> Array<span class="hl opt">[</span>Byte<span class="hl opt">](</span>init<span class="hl opt">.</span>length<span class="hl opt">))(</span><span class="hl num">0</span><span class="hl opt">)</span>
+      <span class="hl kwa">val</span> m <span class="hl opt">=</span> Pattern<span class="hl opt">.</span><span class="hl kwd">compile</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;.*</span><span class="hl esc">\n</span><span class="hl str">|</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">).</span><span class="hl kwd">matcher</span><span class="hl opt">(</span>init<span class="hl opt">)</span>
+      <span class="hl kwa">var</span> i <span class="hl opt">=</span> <span class="hl num">0</span>
+      <span class="hl kwa">while</span> <span class="hl opt">(</span>m<span class="hl opt">.</span>find<span class="hl opt">) {</span>
+        bcs <span class="hl opt">= (</span>bcs <span class="hl opt">++= (</span>init<span class="hl opt">.</span>buf<span class="hl opt">,</span> i<span class="hl opt">,</span> m<span class="hl opt">.</span>start<span class="hl opt">))</span>
+        i <span class="hl opt">=</span> m<span class="hl opt">.</span>end
+      <span class="hl opt">}</span>
+      bcs <span class="hl opt">++= (</span>init<span class="hl opt">.</span>buf<span class="hl opt">,</span> i<span class="hl opt">,</span> init<span class="hl opt">.</span>length<span class="hl opt">)</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwa">val</span> inc <span class="hl opt">=</span> math<span class="hl opt">.</span><span class="hl kwd">max</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,(</span>input<span class="hl opt">.</span>length<span class="hl opt">+</span><span class="hl num">15</span><span class="hl opt">)/</span><span class="hl num">16</span><span class="hl opt">)</span>
+
+    <span class="hl slc">// patterns to count</span>
+    <span class="hl kwa">val</span> patterns  <span class="hl opt">=</span> <span class="hl kwd">Seq</span><span class="hl opt">(</span>
+      <span class="hl str">&quot;agggtaaa|tttaccct&quot;</span> <span class="hl opt">,</span>
+      <span class="hl str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span><span class="hl opt">,</span>
+      <span class="hl str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span><span class="hl opt">)</span>
+
+
+    <span class="hl slc">// run pattern-counting tasks in parallel</span>
+    <span class="hl kwa">val</span> countResults <span class="hl opt">=</span> Array<span class="hl opt">.</span><span class="hl kwd">fill</span><span class="hl opt">(</span>patterns<span class="hl opt">.</span>length<span class="hl opt">)(</span><span class="hl str">&quot;&quot;</span><span class="hl opt">)</span>
+    <span class="hl kwd">doWork</span><span class="hl opt">(</span>
+      <span class="hl kwa">for</span> <span class="hl opt">((</span>p<span class="hl opt">,</span>i<span class="hl opt">) &lt;-</span> patterns<span class="hl opt">.</span>zipWithIndex<span class="hl opt">)</span> <span class="hl kwa">yield</span> <span class="hl opt">{</span>
+        <span class="hl kwa">new</span> Work <span class="hl opt">{</span>
+          <span class="hl kwa">private val</span> m <span class="hl opt">=</span> Pattern<span class="hl opt">.</span><span class="hl kwd">compile</span><span class="hl opt">(</span>p<span class="hl opt">).</span><span class="hl kwd">matcher</span><span class="hl opt">(</span>input<span class="hl opt">)</span>
+          <span class="hl kwa">private var</span> stop <span class="hl opt">=</span> inc
+          <span class="hl kwa">private var</span> n <span class="hl opt">=</span> <span class="hl num">0</span>
+          <span class="hl kwa">def</span> pri <span class="hl opt">=</span> stop <span class="hl opt">+</span> i
+          <span class="hl kwa">def</span> run <span class="hl opt">= {</span>
+            <span class="hl kwa">while</span> <span class="hl opt">(</span>m<span class="hl opt">.</span>find <span class="hl opt">&amp;&amp;</span> m<span class="hl opt">.</span>start <span class="hl opt">&lt;</span> stop<span class="hl opt">)</span> n <span class="hl opt">+=</span> <span class="hl num">1</span>
+            stop <span class="hl opt">+=</span> inc
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>m<span class="hl opt">.</span>hitEnd<span class="hl opt">) {</span>
+              <span class="hl kwd">countResults</span><span class="hl opt">(</span>i<span class="hl opt">) =</span> p <span class="hl opt">+</span> <span class="hl str">&quot; &quot;</span> <span class="hl opt">+</span> n
+              <span class="hl kwd">Seq</span><span class="hl opt">(</span>Done<span class="hl opt">)</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">else</span> <span class="hl opt">{</span>
+             n <span class="hl opt">+=</span> <span class="hl num">1</span>
+             <span class="hl kwd">Seq</span><span class="hl opt">(</span><span class="hl kwa">this</span><span class="hl opt">)</span>
+            <span class="hl opt">}</span>
+          <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+      <span class="hl opt">}</span>
+    <span class="hl opt">)</span>
+    countResults<span class="hl opt">.</span><span class="hl kwd">foreach</span><span class="hl opt">(</span>println<span class="hl opt">)</span>
+
+    <span class="hl slc">// replace IUB</span>
+    <span class="hl kwa">val</span> iub <span class="hl opt">=</span> <span class="hl str">&quot;Bcgt Dagt Hact Kgt Mac Nacgt Rag Scg Vacg Wat Yct&quot;</span><span class="hl opt">.</span><span class="hl kwd">split</span><span class="hl opt">(</span><span class="hl str">' '</span><span class="hl opt">).</span>map<span class="hl opt">{</span> s <span class="hl opt">=&gt;</span>
+      Pattern<span class="hl opt">.</span><span class="hl kwd">compile</span><span class="hl opt">(</span>s<span class="hl opt">.</span><span class="hl kwd">take</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)) -&gt;</span> s<span class="hl opt">.</span><span class="hl kwd">drop</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">mkString</span><span class="hl opt">(</span><span class="hl str">&quot;(&quot;</span><span class="hl opt">,</span><span class="hl str">&quot;|&quot;</span><span class="hl opt">,</span><span class="hl str">&quot;)&quot;</span><span class="hl opt">).</span>getBytes
+    <span class="hl opt">}.</span>toArray
+
+    <span class="hl slc">// run replacement tasks in parallel (in chunks)</span>
+    <span class="hl kwa">val</span> chunks <span class="hl opt">=</span> Array<span class="hl opt">.</span><span class="hl kwd">tabulate</span><span class="hl opt">(</span><span class="hl num">16</span><span class="hl opt">){</span> i <span class="hl opt">=&gt;</span>
+      <span class="hl kwa">val</span> b <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span><span class="hl kwa">new</span> Array<span class="hl opt">[</span>Byte<span class="hl opt">]((</span>inc<span class="hl opt">*</span><span class="hl num">3</span><span class="hl opt">)/</span><span class="hl num">2</span><span class="hl opt">))(</span><span class="hl num">0</span><span class="hl opt">)</span>
+      b <span class="hl opt">++= (</span>input<span class="hl opt">.</span>buf<span class="hl opt">,</span> inc<span class="hl opt">*</span>i<span class="hl opt">,</span> math<span class="hl opt">.</span><span class="hl kwd">min</span><span class="hl opt">(</span>inc<span class="hl opt">*(</span>i<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">),</span> input<span class="hl opt">.</span>length<span class="hl opt">))</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwa">val</span> replaced <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">MegaCS</span><span class="hl opt">(</span>chunks<span class="hl opt">)</span>
+    <span class="hl kwa">val</span> alts <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">MegaCS</span><span class="hl opt">(</span>Array<span class="hl opt">.</span><span class="hl kwd">tabulate</span><span class="hl opt">(</span><span class="hl num">16</span><span class="hl opt">){</span> i <span class="hl opt">=&gt;</span> <span class="hl kwa">new</span> <span class="hl kwd">ByteCS</span><span class="hl opt">(</span><span class="hl kwa">new</span> Array<span class="hl opt">[</span>Byte<span class="hl opt">]((</span>inc<span class="hl opt">*</span><span class="hl num">3</span><span class="hl opt">)/</span><span class="hl num">2</span><span class="hl opt">))(</span><span class="hl num">0</span><span class="hl opt">) })</span>
+    <span class="hl kwa">class</span> <span class="hl kwd">Chunk</span><span class="hl opt">(</span><span class="hl kwa">var</span> j<span class="hl opt">:</span> Int<span class="hl opt">)</span> <span class="hl kwa">extends</span> Work <span class="hl opt">{</span>
+      <span class="hl kwa">private var</span> i <span class="hl opt">=</span> <span class="hl num">0</span>
+      <span class="hl kwa">def</span> pri <span class="hl opt">= (</span>cores<span class="hl opt">*</span>j<span class="hl opt">+</span>i<span class="hl opt">)*</span>inc
+      <span class="hl kwa">def</span> run <span class="hl opt">= {</span>
+        <span class="hl kwa">var</span> ans <span class="hl opt">=</span> replaced<span class="hl opt">.</span><span class="hl kwd">bcs</span><span class="hl opt">(</span>j<span class="hl opt">)</span>
+        <span class="hl kwa">var</span> alt <span class="hl opt">=</span> alts<span class="hl opt">.</span><span class="hl kwd">bcs</span><span class="hl opt">(</span>j<span class="hl opt">)</span>
+        alt<span class="hl opt">.</span>length <span class="hl opt">=</span> <span class="hl num">0</span>
+        <span class="hl kwa">val</span> <span class="hl opt">(</span>p<span class="hl opt">,</span>b<span class="hl opt">) =</span> <span class="hl kwd">iub</span><span class="hl opt">(</span>i<span class="hl opt">)</span>
+        <span class="hl kwa">val</span> m <span class="hl opt">=</span> p<span class="hl opt">.</span><span class="hl kwd">matcher</span><span class="hl opt">(</span>ans<span class="hl opt">)</span>
+        <span class="hl kwa">var</span> k <span class="hl opt">=</span> <span class="hl num">0</span>
+        <span class="hl kwa">while</span> <span class="hl opt">(</span>m<span class="hl opt">.</span>find<span class="hl opt">) {</span>
+          alt <span class="hl opt">= (</span>alt <span class="hl opt">++= (</span>ans<span class="hl opt">.</span>buf<span class="hl opt">,</span> k<span class="hl opt">,</span> m<span class="hl opt">.</span>start<span class="hl opt">))</span>
+          alt <span class="hl opt">= (</span>alt <span class="hl opt">++= (</span>b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> b<span class="hl opt">.</span>length<span class="hl opt">))</span>
+          k <span class="hl opt">=</span> m<span class="hl opt">.</span>end
+        <span class="hl opt">}</span>
+        alt <span class="hl opt">= (</span>alt <span class="hl opt">++= (</span>ans<span class="hl opt">.</span>buf<span class="hl opt">,</span> k<span class="hl opt">,</span> ans<span class="hl opt">.</span>length<span class="hl opt">))</span>
+        replaced<span class="hl opt">.</span><span class="hl kwd">bcs</span><span class="hl opt">(</span>j<span class="hl opt">) =</span> alt
+        alts<span class="hl opt">.</span><span class="hl kwd">bcs</span><span class="hl opt">(</span>j<span class="hl opt">) =</span> ans
+        <span class="hl kwa">if</span> <span class="hl opt">(</span>i<span class="hl opt">+</span><span class="hl num">1</span> <span class="hl opt">&gt;=</span> iub<span class="hl opt">.</span>length<span class="hl opt">)</span> <span class="hl kwd">List</span><span class="hl opt">(</span>Done<span class="hl opt">)</span>
+        <span class="hl kwa">else if</span> <span class="hl opt">(</span>i <span class="hl opt">!=</span> <span class="hl num">0</span> <span class="hl opt">||</span> j<span class="hl opt">+</span><span class="hl num">1</span> <span class="hl opt">&gt;=</span> chunks<span class="hl opt">.</span>length<span class="hl opt">) {</span> i <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span> <span class="hl kwd">List</span><span class="hl opt">(</span><span class="hl kwa">this</span><span class="hl opt">) }</span>
+        <span class="hl kwa">else</span> <span class="hl opt">{</span> i <span class="hl opt">+=</span><span class="hl num">1</span><span class="hl opt">;</span> <span class="hl kwd">List</span><span class="hl opt">(</span><span class="hl kwa">this</span><span class="hl opt">,</span> <span class="hl kwa">new</span> <span class="hl kwd">Chunk</span><span class="hl opt">(</span>j<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">)) }</span>
+      <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwd">doWork</span><span class="hl opt">(</span><span class="hl kwd">List</span><span class="hl opt">(</span><span class="hl kwa">new</span> <span class="hl kwd">Chunk</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">)))</span>
+
+    <span class="hl slc">// print final results</span>
+    <span class="hl kwd">printf</span><span class="hl opt">(</span> <span class="hl str">&quot;</span><span class="hl esc">\n</span><span class="hl str">%d</span><span class="hl esc">\n</span><span class="hl str">%d</span><span class="hl esc">\n</span><span class="hl str">%d</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> init<span class="hl opt">.</span>length<span class="hl opt">,</span> input<span class="hl opt">.</span>length<span class="hl opt">,</span> replaced<span class="hl opt">.</span>length <span class="hl opt">)</span>
+  <span class="hl opt">}</span>
+<span class="hl opt">}</span>

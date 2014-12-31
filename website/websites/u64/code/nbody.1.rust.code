@@ -1,0 +1,168 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"></span>
+<span class="hl com">   contributed by Mark C. Lewis</span>
+<span class="hl com">   modified slightly by Chad Whipkey</span>
+<span class="hl com">   converted from java to rust by Timofey Prodanov</span>
+<span class="hl com">*/</span>
+
+use std<span class="hl opt">::</span>iter<span class="hl opt">::</span>AdditiveIterator<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>os<span class="hl opt">;</span>
+
+<span class="hl kwb">struct</span> Body <span class="hl opt">{</span>
+   pub x<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub y<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub z<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub vx<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub vy<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub vz<span class="hl opt">:</span>      f64<span class="hl opt">,</span>
+   pub mass<span class="hl opt">:</span>   f64
+<span class="hl opt">}</span>
+
+<span class="hl kwb">static</span> pi<span class="hl opt">:</span> f64 <span class="hl opt">=</span> <span class="hl num">3.141592653589793</span><span class="hl opt">;</span>
+<span class="hl kwb">static</span> solar_mass<span class="hl opt">:</span> f64 <span class="hl opt">=</span> <span class="hl num">4</span><span class="hl opt">. *</span> pi <span class="hl opt">*</span> pi<span class="hl opt">;</span>
+<span class="hl kwb">static</span> days_per_year<span class="hl opt">:</span> f64 <span class="hl opt">=</span> <span class="hl num">365.24</span><span class="hl opt">;</span>
+<span class="hl kwb">static</span> planets_count<span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl num">5</span><span class="hl opt">;</span>
+
+impl Body <span class="hl opt">{</span>
+
+   pub fn <span class="hl kwd">bodies</span><span class="hl opt">() -&gt; [</span>Body<span class="hl opt">, ..</span>planets_count<span class="hl opt">] {</span>
+      <span class="hl opt">[</span>
+         <span class="hl slc">// sun</span>
+         Body <span class="hl opt">{</span>
+            x<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            y<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            z<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            vx<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            vy<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            vz<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">.,</span>
+            mass<span class="hl opt">:</span> solar_mass
+         <span class="hl opt">},</span>
+         <span class="hl slc">// jupiter</span>
+         Body <span class="hl opt">{</span>
+            x<span class="hl opt">:</span> <span class="hl num">4.84143144246472090e+00</span><span class="hl opt">,</span>
+            y<span class="hl opt">: -</span><span class="hl num">1.16032004402742839e+00</span><span class="hl opt">,</span>
+            z<span class="hl opt">: -</span><span class="hl num">1.03622044471123109e-01</span><span class="hl opt">,</span>
+            vx<span class="hl opt">:</span> <span class="hl num">1.66007664274403694e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vy<span class="hl opt">:</span> <span class="hl num">7.69901118419740425e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vz<span class="hl opt">: -</span><span class="hl num">6.90460016972063023e-05</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            mass<span class="hl opt">:</span> <span class="hl num">9.54791938424326609e-04</span> <span class="hl opt">*</span> solar_mass
+         <span class="hl opt">},</span>
+         <span class="hl slc">// saturn</span>
+         Body <span class="hl opt">{</span>
+            x<span class="hl opt">:</span> <span class="hl num">8.34336671824457987e+00</span><span class="hl opt">,</span>
+            y<span class="hl opt">:</span> <span class="hl num">4.12479856412430479e+00</span><span class="hl opt">,</span>
+            z<span class="hl opt">: -</span><span class="hl num">4.03523417114321381e-01</span><span class="hl opt">,</span>
+            vx<span class="hl opt">: -</span><span class="hl num">2.76742510726862411e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vy<span class="hl opt">:</span> <span class="hl num">4.99852801234917238e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vz<span class="hl opt">:</span> <span class="hl num">2.30417297573763929e-05</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            mass<span class="hl opt">:</span> <span class="hl num">2.85885980666130812e-04</span> <span class="hl opt">*</span> solar_mass
+         <span class="hl opt">},</span>
+         <span class="hl slc">// uranus</span>
+         Body <span class="hl opt">{</span>
+            x<span class="hl opt">:</span> <span class="hl num">1.28943695621391310e+01</span><span class="hl opt">,</span>
+            y<span class="hl opt">: -</span><span class="hl num">1.51111514016986312e+01</span><span class="hl opt">,</span>
+            z<span class="hl opt">: -</span><span class="hl num">2.23307578892655734e-01</span><span class="hl opt">,</span>
+            vx<span class="hl opt">:</span> <span class="hl num">2.96460137564761618e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vy<span class="hl opt">:</span> <span class="hl num">2.37847173959480950e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vz<span class="hl opt">: -</span><span class="hl num">2.96589568540237556e-05</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            mass<span class="hl opt">:</span> <span class="hl num">4.36624404335156298e-05</span> <span class="hl opt">*</span> solar_mass
+         <span class="hl opt">},</span>
+         <span class="hl slc">// neptune</span>
+         Body <span class="hl opt">{</span>
+            x<span class="hl opt">:</span> <span class="hl num">1.53796971148509165e+01</span><span class="hl opt">,</span>
+            y<span class="hl opt">: -</span><span class="hl num">2.59193146099879641e+01</span><span class="hl opt">,</span>
+            z<span class="hl opt">:</span> <span class="hl num">1.79258772950371181e-01</span><span class="hl opt">,</span>
+            vx<span class="hl opt">:</span> <span class="hl num">2.68067772490389322e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vy<span class="hl opt">:</span> <span class="hl num">1.62824170038242295e-03</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            vz<span class="hl opt">: -</span><span class="hl num">9.51592254519715870e-05</span> <span class="hl opt">*</span> days_per_year<span class="hl opt">,</span>
+            mass<span class="hl opt">:</span> <span class="hl num">5.15138902046611451e-05</span> <span class="hl opt">*</span> solar_mass
+         <span class="hl opt">}</span>
+      <span class="hl opt">]</span>
+   <span class="hl opt">}</span>
+   
+   fn <span class="hl kwd">offset_momentum</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> px<span class="hl opt">:</span> f64<span class="hl opt">,</span> py<span class="hl opt">:</span> f64<span class="hl opt">,</span> pz<span class="hl opt">:</span> f64<span class="hl opt">) {</span>
+      self<span class="hl opt">.</span>vx <span class="hl opt">= -</span>px <span class="hl opt">/</span> solar_mass<span class="hl opt">;</span>
+      self<span class="hl opt">.</span>vy <span class="hl opt">= -</span>py <span class="hl opt">/</span> solar_mass<span class="hl opt">;</span>
+      self<span class="hl opt">.</span>vz <span class="hl opt">= -</span>pz <span class="hl opt">/</span> solar_mass<span class="hl opt">;</span>
+   <span class="hl opt">}</span>
+
+<span class="hl opt">}</span>
+
+<span class="hl kwb">struct</span> NBodySystem <span class="hl opt">{</span>
+   bodies<span class="hl opt">: [</span>Body<span class="hl opt">, ..</span>planets_count<span class="hl opt">]</span>
+<span class="hl opt">}</span>
+
+impl NBodySystem <span class="hl opt">{</span>
+   
+   pub fn <span class="hl kwa">new</span><span class="hl opt">() -&gt;</span> NBodySystem <span class="hl opt">{</span>
+      let mut s <span class="hl opt">=</span> NBodySystem <span class="hl opt">{</span>
+         bodies<span class="hl opt">:</span> Body<span class="hl opt">::</span><span class="hl kwd">bodies</span><span class="hl opt">()</span>
+      <span class="hl opt">};</span>
+      
+      let px <span class="hl opt">=</span> s<span class="hl opt">.</span>bodies<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">map</span><span class="hl opt">(|&amp;</span>x<span class="hl opt">|</span> x<span class="hl opt">.</span>vx <span class="hl opt">*</span> x<span class="hl opt">.</span>mass<span class="hl opt">).</span><span class="hl kwd">sum</span><span class="hl opt">();</span>
+      let py <span class="hl opt">=</span> s<span class="hl opt">.</span>bodies<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">map</span><span class="hl opt">(|&amp;</span>x<span class="hl opt">|</span> x<span class="hl opt">.</span>vy <span class="hl opt">*</span> x<span class="hl opt">.</span>mass<span class="hl opt">).</span><span class="hl kwd">sum</span><span class="hl opt">();</span>
+      let pz <span class="hl opt">=</span> s<span class="hl opt">.</span>bodies<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">map</span><span class="hl opt">(|&amp;</span>x<span class="hl opt">|</span> x<span class="hl opt">.</span>vz <span class="hl opt">*</span> x<span class="hl opt">.</span>mass<span class="hl opt">).</span><span class="hl kwd">sum</span><span class="hl opt">();</span>
+      s<span class="hl opt">.</span>bodies<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">].</span><span class="hl kwd">offset_momentum</span><span class="hl opt">(</span>px<span class="hl opt">,</span> py<span class="hl opt">,</span> pz<span class="hl opt">);</span>
+      s
+   <span class="hl opt">}</span>
+   
+   pub fn <span class="hl kwd">advance</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> dt<span class="hl opt">:</span> f64<span class="hl opt">) {</span>
+      <span class="hl kwa">for</span> i in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> planets_count <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">) {</span>
+         <span class="hl kwa">for</span> j in <span class="hl kwd">range</span><span class="hl opt">(</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">,</span> planets_count<span class="hl opt">) {</span>
+            let dx <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>x <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>x<span class="hl opt">;</span>
+            let dy <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>y <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>y<span class="hl opt">;</span>
+            let dz <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>z <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>z<span class="hl opt">;</span>
+            
+            let dSquared <span class="hl opt">=</span> dx <span class="hl opt">*</span> dx <span class="hl opt">+</span> dy <span class="hl opt">*</span> dy <span class="hl opt">+</span> dz <span class="hl opt">*</span> dz<span class="hl opt">;</span>
+            let dist <span class="hl opt">=</span> dSquared<span class="hl opt">.</span><span class="hl kwd">sqrt</span><span class="hl opt">();</span>
+            let mag <span class="hl opt">=</span> dt <span class="hl opt">/ (</span>dSquared <span class="hl opt">*</span> dist<span class="hl opt">);</span>
+            
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vx <span class="hl opt">-=</span> dx <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vy <span class="hl opt">-=</span> dy <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vz <span class="hl opt">-=</span> dz <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+            
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>vx <span class="hl opt">+=</span> dx <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>vy <span class="hl opt">+=</span> dy <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>vz <span class="hl opt">+=</span> dz <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>mass <span class="hl opt">*</span> mag<span class="hl opt">;</span>
+         <span class="hl opt">}</span>
+      <span class="hl opt">}</span>
+      
+      <span class="hl kwa">for</span> b in self<span class="hl opt">.</span>bodies<span class="hl opt">.</span><span class="hl kwd">mut_iter</span><span class="hl opt">() {</span>
+         b<span class="hl opt">.</span>x <span class="hl opt">+=</span> dt <span class="hl opt">*</span> b<span class="hl opt">.</span>vx<span class="hl opt">;</span>
+         b<span class="hl opt">.</span>y <span class="hl opt">+=</span> dt <span class="hl opt">*</span> b<span class="hl opt">.</span>vy<span class="hl opt">;</span>
+         b<span class="hl opt">.</span>z <span class="hl opt">+=</span> dt <span class="hl opt">*</span> b<span class="hl opt">.</span>vz<span class="hl opt">;</span>
+      <span class="hl opt">}</span>
+   <span class="hl opt">}</span>
+   
+   pub fn <span class="hl kwd">energy</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> f64 <span class="hl opt">{</span>
+      let mut e <span class="hl opt">=</span> <span class="hl num">0</span>f64<span class="hl opt">;</span>
+      <span class="hl kwa">for</span> i in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> planets_count<span class="hl opt">) {</span>
+         e <span class="hl opt">+=</span> <span class="hl num">0.5</span> <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>mass <span class="hl opt">* (</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vx <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vx <span class="hl opt">+</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vy <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vy <span class="hl opt">+</span>
+            self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vz <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>vz<span class="hl opt">);</span>
+         
+         <span class="hl kwa">for</span> j in <span class="hl kwd">range</span><span class="hl opt">(</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">,</span> planets_count<span class="hl opt">) {</span>
+            let dx <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>x <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>x<span class="hl opt">;</span>
+            let dy <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>y <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>y<span class="hl opt">;</span>
+            let dz <span class="hl opt">=</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>z <span class="hl opt">-</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>z<span class="hl opt">;</span>
+            
+            let dist <span class="hl opt">= (</span>dx <span class="hl opt">*</span> dx <span class="hl opt">+</span> dy <span class="hl opt">*</span> dy <span class="hl opt">+</span> dz <span class="hl opt">*</span> dz<span class="hl opt">).</span><span class="hl kwd">sqrt</span><span class="hl opt">();</span>
+            e <span class="hl opt">-= (</span>self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>i<span class="hl opt">].</span>mass <span class="hl opt">*</span> self<span class="hl opt">.</span>bodies<span class="hl opt">[</span>j<span class="hl opt">].</span>mass<span class="hl opt">) /</span> dist<span class="hl opt">;</span>
+         <span class="hl opt">}</span>
+      <span class="hl opt">}</span>
+      e
+   <span class="hl opt">}</span>
+   
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+   let n<span class="hl opt">:</span> <span class="hl kwb">int</span> <span class="hl opt">=</span> <span class="hl kwd">from_str</span><span class="hl opt">(</span>os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">().</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">as_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+   let mut nbs <span class="hl opt">=</span> NBodySystem<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">();</span>
+   println<span class="hl opt">!(</span><span class="hl str">&quot;{:.9f}&quot;</span><span class="hl opt">,</span> nbs<span class="hl opt">.</span><span class="hl kwd">energy</span><span class="hl opt">());</span>
+   <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">,</span> n<span class="hl opt">) {</span>
+      nbs<span class="hl opt">.</span><span class="hl kwd">advance</span><span class="hl opt">(</span><span class="hl num">0.01</span><span class="hl opt">);</span>
+   <span class="hl opt">}</span>
+   println<span class="hl opt">!(</span><span class="hl str">&quot;{:.9f}&quot;</span><span class="hl opt">,</span> nbs<span class="hl opt">.</span><span class="hl kwd">energy</span><span class="hl opt">());</span>
+<span class="hl opt">}</span>

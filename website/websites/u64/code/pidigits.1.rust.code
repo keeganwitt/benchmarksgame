@@ -1,0 +1,93 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by TeXitoi </span>
+
+<span class="hl kwc">extern</span> crate num<span class="hl opt">;</span>
+
+use std<span class="hl opt">::</span>from_str<span class="hl opt">::</span>FromStr<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>num<span class="hl opt">::</span>One<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>num<span class="hl opt">::</span>Zero<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>num<span class="hl opt">::</span>FromPrimitive<span class="hl opt">;</span>
+use num<span class="hl opt">::</span>Integer<span class="hl opt">;</span>
+use num<span class="hl opt">::</span>bigint<span class="hl opt">::</span>BigInt<span class="hl opt">;</span>
+
+<span class="hl kwb">struct</span> Context <span class="hl opt">{</span>
+    numer<span class="hl opt">:</span> BigInt<span class="hl opt">,</span>
+    accum<span class="hl opt">:</span> BigInt<span class="hl opt">,</span>
+    denom<span class="hl opt">:</span> BigInt<span class="hl opt">,</span>
+<span class="hl opt">}</span>
+
+impl Context <span class="hl opt">{</span>
+    fn <span class="hl kwa">new</span><span class="hl opt">() -&gt;</span> Context <span class="hl opt">{</span>
+        Context <span class="hl opt">{</span>
+            numer<span class="hl opt">:</span> One<span class="hl opt">::</span><span class="hl kwd">one</span><span class="hl opt">(),</span>
+            accum<span class="hl opt">:</span> Zero<span class="hl opt">::</span><span class="hl kwd">zero</span><span class="hl opt">(),</span>
+            denom<span class="hl opt">:</span> One<span class="hl opt">::</span><span class="hl kwd">one</span><span class="hl opt">(),</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">from_int</span><span class="hl opt">(</span>i<span class="hl opt">:</span> <span class="hl kwb">int</span><span class="hl opt">) -&gt;</span> BigInt <span class="hl opt">{</span>
+        FromPrimitive<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span>i<span class="hl opt">).</span><span class="hl kwd">unwrap</span><span class="hl opt">()</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">extract_digit</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> <span class="hl kwb">int</span> <span class="hl opt">{</span>
+        <span class="hl kwa">if</span> self<span class="hl opt">.</span>numer <span class="hl opt">&gt;</span> self<span class="hl opt">.</span>accum <span class="hl opt">{</span><span class="hl kwa">return</span> <span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;}</span>
+        <span class="hl kwd">let</span> <span class="hl opt">(</span>q<span class="hl opt">,</span> r<span class="hl opt">) =</span>
+            <span class="hl opt">(</span>self<span class="hl opt">.</span>numer <span class="hl opt">*</span> Context<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span><span class="hl num">3</span><span class="hl opt">) +</span> self<span class="hl opt">.</span>accum<span class="hl opt">)</span>
+            <span class="hl opt">.</span><span class="hl kwd">div_rem</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>denom<span class="hl opt">);</span>
+        <span class="hl kwa">if</span> r <span class="hl opt">+</span> self<span class="hl opt">.</span>numer <span class="hl opt">&gt;=</span> self<span class="hl opt">.</span>denom <span class="hl opt">{</span><span class="hl kwa">return</span> <span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">;}</span>
+        q<span class="hl opt">.</span><span class="hl kwd">to_int</span><span class="hl opt">().</span><span class="hl kwd">unwrap</span><span class="hl opt">()</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">next_term</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> k<span class="hl opt">:</span> <span class="hl kwb">int</span><span class="hl opt">) {</span>
+        let y2 <span class="hl opt">=</span> Context<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span>k <span class="hl opt">*</span> <span class="hl num">2</span> <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">);</span>
+        self<span class="hl opt">.</span>accum <span class="hl opt">= (</span>self<span class="hl opt">.</span>accum <span class="hl opt">+ (</span>self<span class="hl opt">.</span>numer <span class="hl opt">&lt;&lt;</span> <span class="hl num">1</span><span class="hl opt">)) *</span> y2<span class="hl opt">;</span>
+        self<span class="hl opt">.</span>numer <span class="hl opt">=</span> self<span class="hl opt">.</span>numer <span class="hl opt">*</span> Context<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span>k<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>denom <span class="hl opt">=</span> self<span class="hl opt">.</span>denom <span class="hl opt">*</span> y2<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">eliminate_digit</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> d<span class="hl opt">:</span> <span class="hl kwb">int</span><span class="hl opt">) {</span>
+        let d <span class="hl opt">=</span> Context<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span>d<span class="hl opt">);</span>
+        let ten <span class="hl opt">=</span> Context<span class="hl opt">::</span><span class="hl kwd">from_int</span><span class="hl opt">(</span><span class="hl num">10</span><span class="hl opt">);</span>
+        self<span class="hl opt">.</span>accum <span class="hl opt">= (</span>self<span class="hl opt">.</span>accum <span class="hl opt">-</span> self<span class="hl opt">.</span>denom <span class="hl opt">*</span> d<span class="hl opt">) *</span> ten<span class="hl opt">;</span>
+        self<span class="hl opt">.</span>numer <span class="hl opt">=</span> self<span class="hl opt">.</span>numer <span class="hl opt">*</span> ten<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">pidigits</span><span class="hl opt">(</span>n<span class="hl opt">:</span> <span class="hl kwb">int</span><span class="hl opt">) {</span>
+    let mut k <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+    let mut context <span class="hl opt">=</span> Context<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">();</span>
+
+    <span class="hl kwa">for</span> i in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,</span> n <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) {</span>
+        let mut d<span class="hl opt">;</span>
+        loop <span class="hl opt">{</span>
+            k <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            context<span class="hl opt">.</span><span class="hl kwd">next_term</span><span class="hl opt">(</span>k<span class="hl opt">);</span>
+            d <span class="hl opt">=</span> context<span class="hl opt">.</span><span class="hl kwd">extract_digit</span><span class="hl opt">();</span>
+            <span class="hl kwa">if</span> d <span class="hl opt">!= -</span><span class="hl num">1</span> <span class="hl opt">{</span><span class="hl kwa">break</span><span class="hl opt">;}</span>
+        <span class="hl opt">}</span>
+
+        print<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> d<span class="hl opt">);</span>
+        <span class="hl kwa">if</span> i <span class="hl opt">%</span> <span class="hl num">10</span> <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span>print<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\t</span><span class="hl str">:{}</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> i<span class="hl opt">);}</span>
+
+        context<span class="hl opt">.</span><span class="hl kwd">eliminate_digit</span><span class="hl opt">(</span>d<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    let m <span class="hl opt">=</span> n <span class="hl opt">%</span> <span class="hl num">10</span><span class="hl opt">;</span>
+    <span class="hl kwa">if</span> m <span class="hl opt">!=</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+        <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span>m<span class="hl opt">,</span> <span class="hl num">10</span><span class="hl opt">) {</span> print<span class="hl opt">!(</span><span class="hl str">&quot; &quot;</span><span class="hl opt">); }</span>
+        print<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\t</span><span class="hl str">:{}</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> n<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let args <span class="hl opt">=</span> std<span class="hl opt">::</span>os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">();</span>
+    let args <span class="hl opt">=</span> args<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">();</span>
+    let n <span class="hl opt">=</span> <span class="hl kwa">if</span> args<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">() &lt;</span> <span class="hl num">2</span> <span class="hl opt">{</span>
+        <span class="hl num">512</span>
+    <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+        FromStr<span class="hl opt">::</span><span class="hl kwd">from_str</span><span class="hl opt">(</span>args<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">].</span><span class="hl kwd">as_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">()</span>
+    <span class="hl opt">};</span>
+    <span class="hl kwd">pidigits</span><span class="hl opt">(</span>n<span class="hl opt">);</span>
+<span class="hl opt">}</span>

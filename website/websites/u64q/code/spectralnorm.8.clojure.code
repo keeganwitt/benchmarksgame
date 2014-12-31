@@ -1,0 +1,107 @@
+<span class="hl slc">;; The Computer Language Benchmarks Game</span>
+<span class="hl slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">;;</span>
+<span class="hl slc">;; ported from Java #2</span>
+<span class="hl slc">;; provided by Alex Miller</span>
+
+<span class="hl opt">(</span><span class="hl kwa">ns</span> spectralnorm
+  <span class="hl opt">(:</span>import <span class="hl opt">[</span>java.util.concurrent CyclicBarrier<span class="hl opt">]</span>
+           <span class="hl opt">[</span>clojure.lang Numbers<span class="hl opt">])</span>
+  <span class="hl opt">(:</span>gen-class<span class="hl opt">))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>warn-on-reflection<span class="hl opt">*</span> true<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>unchecked-math<span class="hl opt">*</span> true<span class="hl opt">)</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defmacro</span> a <span class="hl opt">[</span>i j<span class="hl opt">]</span>
+  <span class="hl opt">`(/</span> <span class="hl num">1.0</span> <span class="hl opt">(</span><span class="hl kwa">double</span> <span class="hl opt">(+ (</span><span class="hl kwa">Numbers</span><span class="hl opt">/</span>unsignedShiftRightInt <span class="hl opt">(* (+</span> ~i ~j<span class="hl opt">) (+</span> ~i ~j <span class="hl num">1</span><span class="hl opt">))</span> <span class="hl num">1</span><span class="hl opt">) (</span><span class="hl kwa">inc</span> ~i<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> mul-av <span class="hl opt">[</span>^doubles v ^doubles av ^long begin ^long end<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>vl <span class="hl opt">(</span><span class="hl kwa">alength</span> v<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i begin
+           j <span class="hl num">0</span>
+           sum <span class="hl num">0.0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i end<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> j vl<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> i <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">) (+</span> sum <span class="hl opt">(* (</span><span class="hl kwa">a</span> i j<span class="hl opt">) (</span><span class="hl kwa">aget</span> v j<span class="hl opt">))))</span>
+          <span class="hl opt">(</span><span class="hl kwa">do</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> av i sum<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> <span class="hl num">0 0.0</span><span class="hl opt">)))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> mul-atv <span class="hl opt">[</span>^doubles v ^doubles atv ^long begin ^long end<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>vl <span class="hl opt">(</span><span class="hl kwa">alength</span> v<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i begin
+           j <span class="hl num">0</span>
+           sum <span class="hl num">0.0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i end<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> j vl<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> i <span class="hl opt">(</span><span class="hl kwa">inc</span> j<span class="hl opt">) (+</span> sum <span class="hl opt">(* (</span><span class="hl kwa">a</span> j i<span class="hl opt">) (</span><span class="hl kwa">aget</span> v j<span class="hl opt">))))</span>
+          <span class="hl opt">(</span><span class="hl kwa">do</span>
+            <span class="hl opt">(</span><span class="hl kwa">aset</span> atv i sum<span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span> <span class="hl num">0 0.0</span><span class="hl opt">)))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> approximate <span class="hl opt">[</span>^doubles u ^doubles v ^doubles tmp
+                   begin end ^CyclicBarrier barrier
+                   t ^doubles mvbvs ^doubles mvvs<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>begin <span class="hl opt">(</span><span class="hl kwa">long</span> begin<span class="hl opt">)</span>
+        end <span class="hl opt">(</span><span class="hl kwa">long</span> end<span class="hl opt">)</span>
+        t <span class="hl opt">(</span><span class="hl kwa">int</span> t<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i <span class="hl num">10</span><span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">mul-av</span> u tmp begin end<span class="hl opt">)</span>
+        <span class="hl opt">(</span>.await barrier<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">mul-atv</span> tmp v begin end<span class="hl opt">)</span>
+        <span class="hl opt">(</span>.await barrier<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">mul-av</span> v tmp begin end<span class="hl opt">)</span>
+        <span class="hl opt">(</span>.await barrier<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">mul-atv</span> tmp u begin end<span class="hl opt">)</span>
+        <span class="hl opt">(</span>.await barrier<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i begin
+           mvbv <span class="hl num">0.0</span>
+           mvv <span class="hl num">0.0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i end<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>vi <span class="hl opt">(</span><span class="hl kwa">aget</span> v i<span class="hl opt">)]</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)</span>
+                 <span class="hl opt">(+</span> mvbv <span class="hl opt">(* (</span><span class="hl kwa">aget</span> u i<span class="hl opt">)</span> vi<span class="hl opt">))</span>
+                 <span class="hl opt">(+</span> mvv <span class="hl opt">(*</span> vi vi<span class="hl opt">))))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> mvbvs t mvbv<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> mvvs t mvv<span class="hl opt">))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> game <span class="hl opt">[</span>^long n<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>u <span class="hl opt">(</span><span class="hl kwa">double-array</span> n<span class="hl opt">)</span>
+        v <span class="hl opt">(</span><span class="hl kwa">double-array</span> n<span class="hl opt">)</span>
+        tmp <span class="hl opt">(</span><span class="hl kwa">double-array</span> n<span class="hl opt">)</span>
+        nthread <span class="hl opt">(</span>.availableProcessors <span class="hl opt">(</span><span class="hl kwa">Runtime</span><span class="hl opt">/</span>getRuntime<span class="hl opt">))</span>
+        nthread<span class="hl opt">' (</span><span class="hl kwa">dec</span> nthread<span class="hl opt">)</span>
+        th <span class="hl opt">(</span><span class="hl kwa">object-array</span> nthread<span class="hl opt">)</span>
+        mvbv <span class="hl opt">(</span><span class="hl kwa">double-array</span> nthread<span class="hl opt">)</span>
+        mvv <span class="hl opt">(</span><span class="hl kwa">double-array</span> nthread<span class="hl opt">)</span>
+        barrier <span class="hl opt">(</span><span class="hl kwa">CyclicBarrier</span>. nthread<span class="hl opt">)</span>
+        chunk <span class="hl opt">(</span><span class="hl kwa">quot</span> n nthread<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">aset</span> u i <span class="hl num">1.0</span><span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i nthread<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>r1 <span class="hl opt">(*</span> i chunk<span class="hl opt">)</span>
+              r2 <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i nthread<span class="hl opt">') (+</span> r1 chunk<span class="hl opt">)</span> n<span class="hl opt">))</span>
+              thr <span class="hl opt">(</span><span class="hl kwa">Thread</span>. ^Runnable <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[] (</span><span class="hl kwa">approximate</span> u v tmp r1 r2 barrier i mvbv mvv<span class="hl opt">)))]</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> th i thr<span class="hl opt">)</span>
+          <span class="hl opt">(</span>.start thr<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+           vBv <span class="hl num">0.0</span>
+           vv <span class="hl num">0.0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i nthread<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>t ^Thread <span class="hl opt">(</span><span class="hl kwa">nth</span> th i<span class="hl opt">)]</span>
+          <span class="hl opt">(</span>.join t<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (+</span> vBv <span class="hl opt">(</span><span class="hl kwa">aget</span> mvbv i<span class="hl opt">)) (+</span> vv <span class="hl opt">(</span><span class="hl kwa">aget</span> mvv i<span class="hl opt">))))</span>
+        <span class="hl opt">(</span><span class="hl kwa">println</span> <span class="hl opt">(</span><span class="hl kwa">format</span> <span class="hl str">&quot;%.9f&quot;</span> <span class="hl opt">(</span><span class="hl kwa">Math</span><span class="hl opt">/</span>sqrt <span class="hl opt">(/</span> vBv vv<span class="hl opt">))))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> -main <span class="hl opt">[&amp;</span> args<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">long</span> <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">empty</span>? args<span class="hl opt">)</span>
+                  <span class="hl num">1000</span>
+                  <span class="hl opt">(</span><span class="hl kwa">Long</span><span class="hl opt">/</span>parseLong ^String <span class="hl opt">(</span><span class="hl kwa">first</span> args<span class="hl opt">))))]</span>
+    <span class="hl opt">(</span><span class="hl kwa">game</span> n<span class="hl opt">)))</span>

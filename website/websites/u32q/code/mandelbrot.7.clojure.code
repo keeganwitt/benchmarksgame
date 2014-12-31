@@ -1,0 +1,125 @@
+<span class="hl slc">;;   The Computer Language Benchmarks Game</span>
+<span class="hl slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">;;</span>
+<span class="hl slc">;; ported from Java #2</span>
+<span class="hl slc">;; contributed by Alex Miller</span>
+
+<span class="hl opt">(</span><span class="hl kwa">ns</span> mandelbrot
+  <span class="hl opt">(:</span>gen-class<span class="hl opt">)</span>
+  <span class="hl opt">(:</span>import <span class="hl opt">(</span><span class="hl kwa">java</span>.io BufferedOutputStream<span class="hl opt">)</span>
+           <span class="hl opt">(</span><span class="hl kwa">java</span>.util.concurrent.atomic AtomicInteger<span class="hl opt">)))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>warn-on-reflection<span class="hl opt">*</span> true<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">set</span><span class="hl opt">! *</span>unchecked-math<span class="hl opt">*</span> true<span class="hl opt">)</span>
+
+<span class="hl opt">(</span><span class="hl kwa">def</span> yct <span class="hl opt">(</span><span class="hl kwa">AtomicInteger</span>.<span class="hl opt">))</span>
+<span class="hl opt">(</span><span class="hl kwa">def</span> crb nil<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">def</span> cib nil<span class="hl opt">)</span>
+<span class="hl opt">(</span><span class="hl kwa">def</span> out nil<span class="hl opt">)</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> jloop ^long <span class="hl opt">[</span>^longs xy ^doubles state ^long res ^long i<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>x <span class="hl opt">(</span><span class="hl kwa">aget</span> xy <span class="hl num">0</span><span class="hl opt">)</span>
+        y <span class="hl opt">(</span><span class="hl kwa">aget</span> xy <span class="hl num">1</span><span class="hl opt">)</span>
+        crb ^doubles crb
+        cib ^doubles cib<span class="hl opt">]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>b <span class="hl num">0</span>
+           j <span class="hl num">49</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt;</span> j <span class="hl num">0</span><span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>zr1 <span class="hl opt">(</span><span class="hl kwa">aget</span> state <span class="hl num">0</span><span class="hl opt">)</span>
+              zi1 <span class="hl opt">(</span><span class="hl kwa">aget</span> state <span class="hl num">1</span><span class="hl opt">)</span>
+              nzr1 <span class="hl opt">(+ (</span><span class="hl kwa">-</span> <span class="hl opt">(*</span> zr1 zr1<span class="hl opt">) (*</span> zi1 zi1<span class="hl opt">)) (</span><span class="hl kwa">aget</span> crb <span class="hl opt">(+</span> x i<span class="hl opt">)))</span>
+              nzi1 <span class="hl opt">(+ (*</span> zr1 zi1<span class="hl opt">) (*</span> zr1 zi1<span class="hl opt">) (</span><span class="hl kwa">aget</span> cib y<span class="hl opt">))</span>
+              zr2 <span class="hl opt">(</span><span class="hl kwa">aget</span> state <span class="hl num">2</span><span class="hl opt">)</span>
+              zi2 <span class="hl opt">(</span><span class="hl kwa">aget</span> state <span class="hl num">3</span><span class="hl opt">)</span>              
+              nzr2 <span class="hl opt">(+ (</span><span class="hl kwa">-</span> <span class="hl opt">(*</span> zr2 zr2<span class="hl opt">) (*</span> zi2 zi2<span class="hl opt">)) (</span><span class="hl kwa">aget</span> crb <span class="hl opt">(+</span> x i <span class="hl num">1</span><span class="hl opt">)))</span>
+              nzi2 <span class="hl opt">(+ (*</span> zr2 zi2<span class="hl opt">) (*</span> zr2 zi2<span class="hl opt">) (</span><span class="hl kwa">aget</span> cib y<span class="hl opt">))]</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">0</span> nzr1<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">1</span> nzi1<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">2</span> nzr2<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">3</span> nzi2<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt; (+ (*</span> nzr1 nzr1<span class="hl opt">) (*</span> nzi1 nzi1<span class="hl opt">))</span> <span class="hl num">4</span><span class="hl opt">)</span>
+            <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>newb <span class="hl opt">(</span><span class="hl kwa">bit-or</span> b <span class="hl num">2</span><span class="hl opt">)]</span>
+              <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> newb <span class="hl num">3</span><span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">recur</span> newb <span class="hl num">0</span><span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt; (+ (*</span> nzr2 nzr2<span class="hl opt">) (*</span> nzi2 nzi2<span class="hl opt">))</span> <span class="hl num">4</span><span class="hl opt">)</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl num">3 0</span><span class="hl opt">)</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> newb <span class="hl opt">(</span><span class="hl kwa">dec</span> j<span class="hl opt">)))))</span>
+            <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&gt; (+ (*</span> nzr2 nzr2<span class="hl opt">) (*</span> nzi2 nzi2<span class="hl opt">))</span> <span class="hl num">4</span><span class="hl opt">)</span>
+              <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>newb <span class="hl opt">(</span><span class="hl kwa">bit-or</span> b <span class="hl num">1</span><span class="hl opt">)]</span>
+                <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(=</span> newb <span class="hl num">3</span><span class="hl opt">)</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> newb <span class="hl num">0</span><span class="hl opt">)</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> newb <span class="hl opt">(</span><span class="hl kwa">dec</span> j<span class="hl opt">))))</span>
+              <span class="hl opt">(</span><span class="hl kwa">recur</span> b <span class="hl opt">(</span><span class="hl kwa">dec</span> j<span class="hl opt">)))))</span>
+        <span class="hl opt">(+ (</span><span class="hl kwa">bit-shift-left</span> res <span class="hl num">2</span><span class="hl opt">)</span> b<span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> get-byte ^long <span class="hl opt">[</span>^long x ^long y<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>crb ^doubles crb
+        cib ^doubles cib
+        out ^objects out
+        xy <span class="hl opt">(</span><span class="hl kwa">long-array</span> <span class="hl num">2</span><span class="hl opt">)</span>
+        state <span class="hl opt">(</span><span class="hl kwa">double-array</span> <span class="hl num">4</span><span class="hl opt">)]</span> <span class="hl slc">;; [zr1 zi1 zr2 zi2]</span>
+    <span class="hl opt">(</span><span class="hl kwa">aset</span> xy <span class="hl num">0</span> x<span class="hl opt">)</span>
+    <span class="hl opt">(</span><span class="hl kwa">aset</span> xy <span class="hl num">1</span> y<span class="hl opt">)</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>res <span class="hl num">0</span>
+           i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i <span class="hl num">8</span><span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">0</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> crb <span class="hl opt">(+</span> x i<span class="hl opt">)))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">1</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> cib y<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">2</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> crb <span class="hl opt">(+</span> x i <span class="hl num">1</span><span class="hl opt">)))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> state <span class="hl num">3</span> <span class="hl opt">(</span><span class="hl kwa">aget</span> cib y<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">jloop</span> xy state res i<span class="hl opt">) (+</span> i <span class="hl num">2</span><span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">bit-xor</span> res -<span class="hl num">1</span><span class="hl opt">)))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> put-line <span class="hl opt">[</span>^long y ^bytes line<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>linelen <span class="hl opt">(</span><span class="hl kwa">alength</span> line<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>xb <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> xb linelen<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">aset</span> line xb <span class="hl opt">(</span><span class="hl kwa">byte</span> <span class="hl opt">(</span><span class="hl kwa">get-byte</span> <span class="hl opt">(*</span> xb <span class="hl num">8</span><span class="hl opt">)</span> y<span class="hl opt">)))</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> xb<span class="hl opt">))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> putter <span class="hl opt">[</span>out<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>yct ^AtomicInteger yct
+        out ^objects out
+        outlen <span class="hl opt">(</span><span class="hl kwa">alength</span> out<span class="hl opt">)]</span>
+    <span class="hl opt">(</span><span class="hl kwa">fn</span> <span class="hl opt">[]</span>
+      <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>y <span class="hl opt">(</span>.getAndIncrement yct<span class="hl opt">)]</span>
+        <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> y outlen<span class="hl opt">)</span>
+          <span class="hl opt">(</span><span class="hl kwa">do</span>
+            <span class="hl opt">(</span><span class="hl kwa">put-line</span> y <span class="hl opt">(</span><span class="hl kwa">aget</span> out y<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span>.getAndIncrement yct<span class="hl opt">))))))))</span>
+
+<span class="hl opt">(</span><span class="hl kwa">defn</span> -main <span class="hl opt">[&amp;</span> args<span class="hl opt">]</span>
+  <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>n <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(</span><span class="hl kwa">pos</span>? <span class="hl opt">(</span><span class="hl kwa">count</span> args<span class="hl opt">)) (</span>. Long parseLong <span class="hl opt">(</span><span class="hl kwa">nth</span> args <span class="hl num">0</span><span class="hl opt">)</span> <span class="hl num">10</span><span class="hl opt">)</span> <span class="hl num">6000</span><span class="hl opt">)</span>
+        np7 <span class="hl opt">(+</span> n <span class="hl num">7</span><span class="hl opt">)</span>
+        invn <span class="hl opt">(/</span> <span class="hl num">2.0</span> n<span class="hl opt">)</span>
+        threads <span class="hl opt">(*</span> <span class="hl num">2</span> <span class="hl opt">(</span>.availableProcessors <span class="hl opt">(</span><span class="hl kwa">Runtime</span><span class="hl opt">/</span>getRuntime<span class="hl opt">)))</span>
+        crb ^doubles <span class="hl opt">(</span><span class="hl kwa">double-array</span> np7<span class="hl opt">)</span>
+        cib ^doubles <span class="hl opt">(</span><span class="hl kwa">double-array</span> np7<span class="hl opt">)</span>
+        out ^objects <span class="hl opt">(</span><span class="hl kwa">into-array</span> <span class="hl opt">(</span><span class="hl kwa">repeatedly</span> n <span class="hl opt">#(</span><span class="hl kwa">byte-array</span> <span class="hl opt">(</span><span class="hl kwa">quot</span> <span class="hl opt">(+</span> n <span class="hl num">7</span><span class="hl opt">)</span> <span class="hl num">8</span><span class="hl opt">))))]</span>
+    <span class="hl opt">(</span><span class="hl kwa">alter-var-root</span> <span class="hl opt">#'</span>crb <span class="hl opt">(</span><span class="hl kwa">constantly</span> crb<span class="hl opt">))</span>
+    <span class="hl opt">(</span><span class="hl kwa">alter-var-root</span> <span class="hl opt">#'</span>cib <span class="hl opt">(</span><span class="hl kwa">constantly</span> cib<span class="hl opt">))</span>
+    <span class="hl opt">(</span><span class="hl kwa">alter-var-root</span> <span class="hl opt">#'</span>out <span class="hl opt">(</span><span class="hl kwa">constantly</span> out<span class="hl opt">))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+      <span class="hl opt">(</span><span class="hl kwa">when</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>m <span class="hl opt">(*</span> invn i<span class="hl opt">)]</span>        
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> cib i <span class="hl opt">(</span><span class="hl kwa">-</span> m <span class="hl num">1.0</span><span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">aset</span> crb i <span class="hl opt">(</span><span class="hl kwa">-</span> m <span class="hl num">1.5</span><span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))))</span>
+    <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span>
+           pool <span class="hl opt">[]]</span>
+      <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i threads<span class="hl opt">)</span>
+        <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">) (</span><span class="hl kwa">conj</span> pool <span class="hl opt">(</span><span class="hl kwa">Thread</span>. ^Runnable <span class="hl opt">(</span><span class="hl kwa">putter</span> out<span class="hl opt">))))</span>
+        <span class="hl opt">(</span><span class="hl kwa">do</span>
+          <span class="hl opt">(</span><span class="hl kwa">doseq</span> <span class="hl opt">[</span>^Thread t pool<span class="hl opt">] (</span>.start t<span class="hl opt">))</span>
+          <span class="hl opt">(</span><span class="hl kwa">let</span> <span class="hl opt">[</span>stream <span class="hl opt">(</span><span class="hl kwa">BufferedOutputStream</span>. System<span class="hl opt">/</span>out<span class="hl opt">)]</span>
+            <span class="hl opt">(</span>.write stream ^bytes <span class="hl opt">(</span>.getBytes <span class="hl opt">(</span><span class="hl kwa">format</span> <span class="hl str">&quot;P4</span><span class="hl esc">\n</span><span class="hl str">%d %d</span><span class="hl esc">\n</span><span class="hl str">&quot;</span> n n<span class="hl opt">)))</span>
+            <span class="hl opt">(</span><span class="hl kwa">doseq</span> <span class="hl opt">[</span>^Thread t pool<span class="hl opt">] (</span>.join t<span class="hl opt">))</span>
+            <span class="hl opt">(</span><span class="hl kwa">loop</span> <span class="hl opt">[</span>i <span class="hl num">0</span><span class="hl opt">]</span>
+              <span class="hl opt">(</span><span class="hl kwa">if</span> <span class="hl opt">(&lt;</span> i n<span class="hl opt">)</span>
+                <span class="hl opt">(</span><span class="hl kwa">do</span>
+                  <span class="hl opt">(</span>.write stream ^bytes <span class="hl opt">(</span><span class="hl kwa">aget</span> out i<span class="hl opt">))</span>
+                  <span class="hl opt">(</span><span class="hl kwa">recur</span> <span class="hl opt">(</span><span class="hl kwa">inc</span> i<span class="hl opt">)))</span>
+                <span class="hl opt">(</span>.close stream<span class="hl opt">)))))))))</span>
+
+

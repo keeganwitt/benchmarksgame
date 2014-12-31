@@ -1,0 +1,189 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"> *</span>
+<span class="hl com"> * contributed by Tylor Arndt</span>
+<span class="hl com"> */</span>
+
+<span class="hl kwa">package</span> main
+
+<span class="hl kwa">import</span> <span class="hl opt">(</span>
+   <span class="hl str">&quot;bufio&quot;</span>
+   <span class="hl str">&quot;bytes&quot;</span>
+   <span class="hl str">&quot;fmt&quot;</span>
+   <span class="hl str">&quot;io/ioutil&quot;</span>
+   <span class="hl str">&quot;log&quot;</span>
+   <span class="hl str">&quot;os&quot;</span>
+   <span class="hl str">&quot;runtime&quot;</span>
+   <span class="hl str">&quot;sort&quot;</span>
+   <span class="hl str">&quot;sync&quot;</span>
+<span class="hl opt">)</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">main</span><span class="hl opt">() {</span>
+   runtime<span class="hl opt">.</span><span class="hl kwd">GOMAXPROCS</span><span class="hl opt">(</span><span class="hl num">4</span><span class="hl opt">)</span>
+   dna <span class="hl opt">:=</span> <span class="hl kwd">readEncDNA</span><span class="hl opt">()</span>
+   <span class="hl kwa">var</span> wgs <span class="hl opt">[</span><span class="hl num">7</span><span class="hl opt">]*</span>sync<span class="hl opt">.</span>WaitGroup
+   <span class="hl kwa">for</span> i <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> <span class="hl num">7</span><span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      wgs<span class="hl opt">[</span>i<span class="hl opt">] =</span> <span class="hl kwb">new</span><span class="hl opt">(</span>sync<span class="hl opt">.</span>WaitGroup<span class="hl opt">)</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">1</span><span class="hl opt">,</span> <span class="hl kwb">nil</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">3</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">4</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">2</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">3</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">6</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">3</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">4</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">12</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">4</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">5</span><span class="hl opt">])</span>
+   <span class="hl kwd">report</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> <span class="hl num">18</span><span class="hl opt">,</span> wgs<span class="hl opt">[</span><span class="hl num">5</span><span class="hl opt">],</span> wgs<span class="hl opt">[</span><span class="hl num">6</span><span class="hl opt">])</span>
+   wgs<span class="hl opt">[</span><span class="hl num">6</span><span class="hl opt">].</span><span class="hl kwd">Wait</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">readEncDNA</span><span class="hl opt">() []</span><span class="hl kwb">byte</span> <span class="hl opt">{</span>
+   in<span class="hl opt">,</span> startTok <span class="hl opt">:=</span> bufio<span class="hl opt">.</span><span class="hl kwd">NewReader</span><span class="hl opt">(</span>os<span class="hl opt">.</span>Stdin<span class="hl opt">), []</span><span class="hl kwb">byte</span><span class="hl opt">(</span><span class="hl str">&quot;&gt;THREE &quot;</span><span class="hl opt">)</span>
+   <span class="hl kwa">for</span> line<span class="hl opt">,</span> err <span class="hl opt">:=</span> in<span class="hl opt">.</span><span class="hl kwd">ReadSlice</span><span class="hl opt">(</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">); !</span>bytes<span class="hl opt">.</span><span class="hl kwd">HasPrefix</span><span class="hl opt">(</span>line<span class="hl opt">,</span> startTok<span class="hl opt">);</span> line<span class="hl opt">,</span> err <span class="hl opt">=</span> in<span class="hl opt">.</span><span class="hl kwd">ReadSlice</span><span class="hl opt">(</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">) {</span>
+      <span class="hl kwa">if</span> err <span class="hl opt">!=</span> <span class="hl kwb">nil</span> <span class="hl opt">{</span>
+         log<span class="hl opt">.</span><span class="hl kwd">Panicf</span><span class="hl opt">(</span><span class="hl str">&quot;Error: Could not read input from stdin; Details: %s&quot;</span><span class="hl opt">,</span> err<span class="hl opt">)</span>
+      <span class="hl opt">}</span>
+   <span class="hl opt">}</span>
+   ascii<span class="hl opt">,</span> err <span class="hl opt">:=</span> ioutil<span class="hl opt">.</span><span class="hl kwd">ReadAll</span><span class="hl opt">(</span>in<span class="hl opt">)</span>
+   <span class="hl kwa">if</span> err <span class="hl opt">!=</span> <span class="hl kwb">nil</span> <span class="hl opt">{</span>
+      log<span class="hl opt">.</span><span class="hl kwd">Panicf</span><span class="hl opt">(</span><span class="hl str">&quot;Error: Could not read input from stdin; Details: %s&quot;</span><span class="hl opt">,</span> err<span class="hl opt">)</span>
+   <span class="hl opt">}</span>
+   j <span class="hl opt">:=</span> <span class="hl num">0</span>
+   <span class="hl kwa">for</span> i<span class="hl opt">,</span> c<span class="hl opt">,</span> asciic <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">byte</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">),</span> <span class="hl kwb">len</span><span class="hl opt">(</span>ascii<span class="hl opt">);</span> i <span class="hl opt">&lt;</span> asciic<span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      c <span class="hl opt">=</span> ascii<span class="hl opt">[</span>i<span class="hl opt">]</span>
+      <span class="hl kwa">switch</span> c <span class="hl opt">{</span>
+      <span class="hl kwa">case</span> <span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl str">'A'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">0</span>
+      <span class="hl kwa">case</span> <span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl str">'T'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">1</span>
+      <span class="hl kwa">case</span> <span class="hl str">'g'</span><span class="hl opt">,</span> <span class="hl str">'G'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">2</span>
+      <span class="hl kwa">case</span> <span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl str">'C'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">3</span>
+      <span class="hl kwa">case</span> <span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">:</span>
+         <span class="hl kwa">continue</span>
+      <span class="hl kwa">default</span><span class="hl opt">:</span>
+         log<span class="hl opt">.</span><span class="hl kwd">Fatalf</span><span class="hl opt">(</span><span class="hl str">&quot;Error: Invalid nucleotide value: '%c'&quot;</span><span class="hl opt">,</span> ascii<span class="hl opt">[</span>i<span class="hl opt">])</span>
+      <span class="hl opt">}</span>
+      ascii<span class="hl opt">[</span>j<span class="hl opt">] =</span> c
+      j<span class="hl opt">++</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> ascii<span class="hl opt">[:</span>j<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">]</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">var</span> targSeqs <span class="hl opt">= []</span><span class="hl kwb">string</span><span class="hl opt">{</span><span class="hl num">3</span><span class="hl opt">:</span> <span class="hl str">&quot;GGT&quot;</span><span class="hl opt">,</span> <span class="hl num">4</span><span class="hl opt">:</span> <span class="hl str">&quot;GGTA&quot;</span><span class="hl opt">,</span> <span class="hl num">6</span><span class="hl opt">:</span> <span class="hl str">&quot;GGTATT&quot;</span><span class="hl opt">,</span> <span class="hl num">12</span><span class="hl opt">:</span> <span class="hl str">&quot;GGTATTTTAATT&quot;</span><span class="hl opt">,</span> <span class="hl num">18</span><span class="hl opt">:</span> <span class="hl str">&quot;GGTATTTTAATTTATAGT&quot;</span><span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">report</span><span class="hl opt">(</span>dna <span class="hl opt">[]</span><span class="hl kwb">byte</span><span class="hl opt">,</span> n <span class="hl kwb">int</span><span class="hl opt">,</span> prev<span class="hl opt">,</span> done <span class="hl opt">*</span>sync<span class="hl opt">.</span>WaitGroup<span class="hl opt">) {</span>
+   done<span class="hl opt">.</span><span class="hl kwd">Add</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)</span>
+   <span class="hl kwa">go func</span><span class="hl opt">() {</span>
+      tbl<span class="hl opt">,</span> output <span class="hl opt">:=</span> <span class="hl kwd">count</span><span class="hl opt">(</span>dna<span class="hl opt">,</span> n<span class="hl opt">),</span> <span class="hl str">&quot;&quot;</span>
+      <span class="hl kwa">switch</span> n <span class="hl opt">{</span>
+      <span class="hl kwa">case</span> <span class="hl num">1</span><span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">:</span>
+         output <span class="hl opt">=</span> <span class="hl kwd">freqReport</span><span class="hl opt">(</span>tbl<span class="hl opt">,</span> n<span class="hl opt">)</span>
+      <span class="hl kwa">default</span><span class="hl opt">:</span>
+         targ <span class="hl opt">:=</span> targSeqs<span class="hl opt">[</span>n<span class="hl opt">]</span>
+         output <span class="hl opt">=</span> fmt<span class="hl opt">.</span><span class="hl kwd">Sprintf</span><span class="hl opt">(</span><span class="hl str">&quot;%d</span><span class="hl esc">\t</span><span class="hl str">%s</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> tbl<span class="hl opt">[</span><span class="hl kwd">compStr</span><span class="hl opt">(</span>targ<span class="hl opt">)],</span> targ<span class="hl opt">)</span>
+      <span class="hl opt">}</span>
+      <span class="hl kwa">if</span> prev <span class="hl opt">!=</span> <span class="hl kwb">nil</span> <span class="hl opt">{</span>
+         prev<span class="hl opt">.</span><span class="hl kwd">Wait</span><span class="hl opt">()</span>
+      <span class="hl opt">}</span>
+      fmt<span class="hl opt">.</span><span class="hl kwd">Print</span><span class="hl opt">(</span>output<span class="hl opt">)</span>
+      done<span class="hl opt">.</span><span class="hl kwd">Done</span><span class="hl opt">()</span>
+   <span class="hl opt">}()</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">count</span><span class="hl opt">(</span>dna <span class="hl opt">[]</span><span class="hl kwb">byte</span><span class="hl opt">,</span> n <span class="hl kwb">int</span><span class="hl opt">)</span> <span class="hl kwa">map</span><span class="hl opt">[</span><span class="hl kwb">uint64</span><span class="hl opt">]</span><span class="hl kwb">uint64</span> <span class="hl opt">{</span>
+   tbl <span class="hl opt">:=</span> <span class="hl kwb">make</span><span class="hl opt">(</span><span class="hl kwa">map</span><span class="hl opt">[</span><span class="hl kwb">uint64</span><span class="hl opt">]</span><span class="hl kwb">uint64</span><span class="hl opt">, (</span><span class="hl num">2</span><span class="hl opt">&lt;&lt;</span><span class="hl num">16</span><span class="hl opt">)+</span><span class="hl num">1</span><span class="hl opt">)</span>
+   <span class="hl kwa">for</span> i<span class="hl opt">,</span> end <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">len</span><span class="hl opt">(</span>dna<span class="hl opt">)-</span>n<span class="hl opt">;</span> i <span class="hl opt">&lt;</span> end<span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      tbl<span class="hl opt">[</span><span class="hl kwd">compress</span><span class="hl opt">(</span>dna<span class="hl opt">[</span>i<span class="hl opt">:</span>i<span class="hl opt">+</span>n<span class="hl opt">])]++</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> tbl
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">compress</span><span class="hl opt">(</span>dna <span class="hl opt">[]</span><span class="hl kwb">byte</span><span class="hl opt">)</span> <span class="hl kwb">uint64</span> <span class="hl opt">{</span>
+   <span class="hl kwa">var</span> val <span class="hl kwb">uint64</span>
+   <span class="hl kwa">for</span> i<span class="hl opt">,</span> dnac <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">len</span><span class="hl opt">(</span>dna<span class="hl opt">);</span> i <span class="hl opt">&lt;</span> dnac<span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      val <span class="hl opt">= (</span>val <span class="hl opt">&lt;&lt;</span> <span class="hl num">2</span><span class="hl opt">)</span> | <span class="hl kwb">uint64</span><span class="hl opt">(</span>dna<span class="hl opt">[</span>i<span class="hl opt">])</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> val
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">compStr</span><span class="hl opt">(</span>dna <span class="hl kwb">string</span><span class="hl opt">)</span> <span class="hl kwb">uint64</span> <span class="hl opt">{</span>
+   raw <span class="hl opt">:= []</span><span class="hl kwb">byte</span><span class="hl opt">(</span>dna<span class="hl opt">)</span>
+   <span class="hl kwa">for</span> i<span class="hl opt">,</span> rawc<span class="hl opt">,</span> c <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">len</span><span class="hl opt">(</span>raw<span class="hl opt">),</span> <span class="hl kwb">byte</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">);</span> i <span class="hl opt">&lt;</span> rawc<span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      c <span class="hl opt">=</span> raw<span class="hl opt">[</span>i<span class="hl opt">]</span>
+      <span class="hl kwa">switch</span> c <span class="hl opt">{</span>
+      <span class="hl kwa">case</span> <span class="hl str">'A'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">0</span>
+      <span class="hl kwa">case</span> <span class="hl str">'T'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">1</span>
+      <span class="hl kwa">case</span> <span class="hl str">'G'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">2</span>
+      <span class="hl kwa">case</span> <span class="hl str">'C'</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl num">3</span>
+      <span class="hl opt">}</span>
+      raw<span class="hl opt">[</span>i<span class="hl opt">] =</span> c
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> <span class="hl kwd">compress</span><span class="hl opt">(</span>raw<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">decompToBytes</span><span class="hl opt">(</span>compDNA <span class="hl kwb">uint64</span><span class="hl opt">,</span> n <span class="hl kwb">int</span><span class="hl opt">) []</span><span class="hl kwb">byte</span> <span class="hl opt">{</span>
+   buf <span class="hl opt">:=</span> bytes<span class="hl opt">.</span><span class="hl kwd">NewBuffer</span><span class="hl opt">(</span><span class="hl kwb">make</span><span class="hl opt">([]</span><span class="hl kwb">byte</span><span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> n<span class="hl opt">))</span>
+   <span class="hl kwa">var</span> c <span class="hl kwb">byte</span>
+   <span class="hl kwa">for</span> i <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> n<span class="hl opt">;</span> i<span class="hl opt">++ {</span>
+      <span class="hl kwa">switch</span> compDNA <span class="hl opt">&amp;</span> <span class="hl num">3</span> <span class="hl opt">{</span>
+      <span class="hl kwa">case</span> <span class="hl num">0</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl str">'A'</span>
+      <span class="hl kwa">case</span> <span class="hl num">1</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl str">'T'</span>
+      <span class="hl kwa">case</span> <span class="hl num">2</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl str">'G'</span>
+      <span class="hl kwa">case</span> <span class="hl num">3</span><span class="hl opt">:</span>
+         c <span class="hl opt">=</span> <span class="hl str">'C'</span>
+      <span class="hl opt">}</span>
+      buf<span class="hl opt">.</span><span class="hl kwd">WriteByte</span><span class="hl opt">(</span>c<span class="hl opt">)</span>
+      compDNA <span class="hl opt">=</span> compDNA <span class="hl opt">&gt;&gt;</span> <span class="hl num">2</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">if</span> n <span class="hl opt">&gt;</span> <span class="hl num">1</span> <span class="hl opt">{</span>
+      <span class="hl kwa">return</span> <span class="hl kwd">reverse</span><span class="hl opt">(</span>buf<span class="hl opt">.</span><span class="hl kwd">Bytes</span><span class="hl opt">())</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> buf<span class="hl opt">.</span><span class="hl kwd">Bytes</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">reverse</span><span class="hl opt">(</span>s <span class="hl opt">[]</span><span class="hl kwb">byte</span><span class="hl opt">) []</span><span class="hl kwb">byte</span> <span class="hl opt">{</span>
+   <span class="hl kwa">for</span> i<span class="hl opt">,</span> j <span class="hl opt">:=</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">len</span><span class="hl opt">(</span>s<span class="hl opt">)-</span><span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> j<span class="hl opt">;</span> i<span class="hl opt">,</span> j <span class="hl opt">=</span> i<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">,</span> j<span class="hl opt">-</span><span class="hl num">1</span> <span class="hl opt">{</span>
+      s<span class="hl opt">[</span>i<span class="hl opt">],</span> s<span class="hl opt">[</span>j<span class="hl opt">] =</span> s<span class="hl opt">[</span>j<span class="hl opt">],</span> s<span class="hl opt">[</span>i<span class="hl opt">]</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> s
+<span class="hl opt">}</span>
+
+<span class="hl kwa">func</span> <span class="hl kwd">freqReport</span><span class="hl opt">(</span>tbl <span class="hl kwa">map</span><span class="hl opt">[</span><span class="hl kwb">uint64</span><span class="hl opt">]</span><span class="hl kwb">uint64</span><span class="hl opt">,</span> n <span class="hl kwb">int</span><span class="hl opt">)</span> <span class="hl kwb">string</span> <span class="hl opt">{</span>
+   seqs <span class="hl opt">:=</span> <span class="hl kwb">make</span><span class="hl opt">(</span>seqSlice<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl kwb">len</span><span class="hl opt">(</span>tbl<span class="hl opt">))</span>
+   <span class="hl kwa">var</span> val<span class="hl opt">,</span> count<span class="hl opt">,</span> sum <span class="hl kwb">uint64</span>
+   <span class="hl kwa">for</span> val<span class="hl opt">,</span> count <span class="hl opt">=</span> <span class="hl kwa">range</span> tbl <span class="hl opt">{</span>
+      seqs <span class="hl opt">=</span> <span class="hl kwd">append</span><span class="hl opt">(</span>seqs<span class="hl opt">,</span> seq<span class="hl opt">{</span>nuc<span class="hl opt">:</span> <span class="hl kwd">decompToBytes</span><span class="hl opt">(</span>val<span class="hl opt">,</span> n<span class="hl opt">),</span> n<span class="hl opt">:</span> count<span class="hl opt">})</span>
+      sum <span class="hl opt">+=</span> count
+   <span class="hl opt">}</span>
+   sort<span class="hl opt">.</span><span class="hl kwd">Sort</span><span class="hl opt">(</span>seqs<span class="hl opt">)</span>
+   <span class="hl kwa">var</span> buf bytes<span class="hl opt">.</span>Buffer
+   sumFloat<span class="hl opt">,</span> entry <span class="hl opt">:=</span> <span class="hl kwb">float64</span><span class="hl opt">(</span>sum<span class="hl opt">),</span> seq<span class="hl opt">{}</span>
+   <span class="hl kwa">for</span> _<span class="hl opt">,</span> entry <span class="hl opt">=</span> <span class="hl kwa">range</span> seqs <span class="hl opt">{</span>
+      fmt<span class="hl opt">.</span><span class="hl kwd">Fprintf</span><span class="hl opt">(&amp;</span>buf<span class="hl opt">,</span> <span class="hl str">&quot;%s %.3f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> entry<span class="hl opt">.</span>nuc<span class="hl opt">, (</span><span class="hl num">100</span><span class="hl opt">*</span><span class="hl kwb">float64</span><span class="hl opt">(</span>entry<span class="hl opt">.</span>n<span class="hl opt">))/</span>sumFloat<span class="hl opt">)</span>
+   <span class="hl opt">}</span>
+   buf<span class="hl opt">.</span><span class="hl kwd">WriteByte</span><span class="hl opt">(</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+   <span class="hl kwa">return</span> buf<span class="hl opt">.</span><span class="hl kwd">String</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">type</span> seq <span class="hl kwa">struct</span> <span class="hl opt">{</span>
+   nuc <span class="hl opt">[]</span><span class="hl kwb">byte</span>
+   n   <span class="hl kwb">uint64</span>
+<span class="hl opt">}</span>
+
+<span class="hl kwa">type</span> seqSlice <span class="hl opt">[]</span>seq
+
+<span class="hl kwa">func</span> <span class="hl opt">(</span>seq seqSlice<span class="hl opt">)</span> <span class="hl kwd">Len</span><span class="hl opt">()</span> <span class="hl kwb">int</span>      <span class="hl opt">{</span> <span class="hl kwa">return</span> <span class="hl kwb">len</span><span class="hl opt">(</span>seq<span class="hl opt">) }</span>
+<span class="hl kwa">func</span> <span class="hl opt">(</span>seq seqSlice<span class="hl opt">)</span> <span class="hl kwd">Swap</span><span class="hl opt">(</span>i<span class="hl opt">,</span> j <span class="hl kwb">int</span><span class="hl opt">) {</span> seq<span class="hl opt">[</span>i<span class="hl opt">],</span> seq<span class="hl opt">[</span>j<span class="hl opt">] =</span> seq<span class="hl opt">[</span>j<span class="hl opt">],</span> seq<span class="hl opt">[</span>i<span class="hl opt">] }</span>
+<span class="hl kwa">func</span> <span class="hl opt">(</span>seq seqSlice<span class="hl opt">)</span> <span class="hl kwd">Less</span><span class="hl opt">(</span>i<span class="hl opt">,</span> j <span class="hl kwb">int</span><span class="hl opt">)</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+   <span class="hl kwa">if</span> seq<span class="hl opt">[</span>i<span class="hl opt">].</span>n <span class="hl opt">==</span> seq<span class="hl opt">[</span>j<span class="hl opt">].</span>n <span class="hl opt">{</span>
+      <span class="hl kwa">return</span> bytes<span class="hl opt">.</span><span class="hl kwd">Compare</span><span class="hl opt">(</span>seq<span class="hl opt">[</span>i<span class="hl opt">].</span>nuc<span class="hl opt">,</span> seq<span class="hl opt">[</span>j<span class="hl opt">].</span>nuc<span class="hl opt">) &lt;</span> <span class="hl num">0</span>
+   <span class="hl opt">}</span>
+   <span class="hl kwa">return</span> seq<span class="hl opt">[</span>i<span class="hl opt">].</span>n <span class="hl opt">&gt;</span> seq<span class="hl opt">[</span>j<span class="hl opt">].</span>n
+<span class="hl opt">}</span>

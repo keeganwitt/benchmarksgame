@@ -1,0 +1,139 @@
+﻿﻿<span class="hl com">/*</span>
+<span class="hl com"> * The Computer Language Benchmarks Game</span>
+<span class="hl com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"> * contributed by Isaac Gouy, transliterated from Oleg Mazurov's Java program</span>
+<span class="hl com"> * modified by Konstantin Safonov</span>
+<span class="hl com">*/</span>
+<span class="hl kwa">using</span> System<span class="hl opt">;</span>
+<span class="hl kwa">using</span> System<span class="hl opt">.</span>Threading<span class="hl opt">;</span>
+
+<span class="hl kwa">internal static class</span> FannkuchRedux <span class="hl opt">{</span>
+    <span class="hl kwa">private</span> <span class="hl kwb">const int</span> Nchunks <span class="hl opt">=</span> <span class="hl num">150</span><span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span> _chunksz<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span> _ntasks<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span> _n<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span><span class="hl opt">[]</span> _fact<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span><span class="hl opt">[]</span> _maxFlips<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span><span class="hl opt">[]</span> _chkSums<span class="hl opt">;</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span> _taskId<span class="hl opt">;</span>
+
+    <span class="hl kwa">private static readonly</span> <span class="hl kwb">object</span> TaskidLocker <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">object</span><span class="hl opt">();</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">int</span> <span class="hl kwd">GetTaskId</span><span class="hl opt">() {</span> <span class="hl kwd">lock</span> <span class="hl opt">(</span> TaskidLocker <span class="hl opt">) {</span> <span class="hl kwa">return</span> _taskId<span class="hl opt">++; } }</span>
+
+    <span class="hl kwa">private static</span> unsafe <span class="hl kwb">void</span> <span class="hl kwd">Run</span><span class="hl opt">() {</span>
+        var p <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">long</span><span class="hl opt">[</span>_n<span class="hl opt">];</span>
+        var pp <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">long</span><span class="hl opt">[</span>_n<span class="hl opt">];</span>
+        var count <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">int</span><span class="hl opt">[</span>_n<span class="hl opt">];</span>
+        <span class="hl kwd">fixed</span> <span class="hl opt">(</span><span class="hl kwb">int</span><span class="hl opt">*</span> qc <span class="hl opt">=</span> count<span class="hl opt">,</span> qf <span class="hl opt">=</span> _fact<span class="hl opt">)</span>
+        <span class="hl kwd">fixed</span> <span class="hl opt">(</span> <span class="hl kwb">long</span><span class="hl opt">*</span> qp <span class="hl opt">=</span> p<span class="hl opt">,</span> qpp <span class="hl opt">=</span> pp <span class="hl opt">)</span> <span class="hl kwd">RunCore</span><span class="hl opt">(</span> qpp<span class="hl opt">,</span> qp<span class="hl opt">,</span> p<span class="hl opt">,</span> qc<span class="hl opt">,</span> count<span class="hl opt">,</span> qf <span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">private static</span> unsafe <span class="hl kwb">void</span> <span class="hl kwd">RunCore</span><span class="hl opt">(</span> <span class="hl kwb">long</span><span class="hl opt">*</span> qpp<span class="hl opt">,</span> <span class="hl kwb">long</span><span class="hl opt">*</span> qp<span class="hl opt">,</span> <span class="hl kwb">long</span><span class="hl opt">[]</span> p<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">*</span> qc<span class="hl opt">,</span>
+        <span class="hl kwb">int</span><span class="hl opt">[]</span> count<span class="hl opt">,</span> <span class="hl kwb">int</span><span class="hl opt">*</span> qf <span class="hl opt">) {</span>
+        <span class="hl kwb">int</span> task<span class="hl opt">;</span>
+        <span class="hl kwb">long</span><span class="hl opt">*</span> pp1 <span class="hl opt">=</span> qpp <span class="hl opt">+</span> <span class="hl num">1L</span><span class="hl opt">,</span> ppm1 <span class="hl opt">=</span> qpp <span class="hl opt">-</span> <span class="hl num">1L</span><span class="hl opt">,</span> qpe <span class="hl opt">=</span> qp <span class="hl opt">+</span> p<span class="hl opt">.</span>LongLength<span class="hl opt">,</span> qp1 <span class="hl opt">=</span> qp <span class="hl opt">+</span> <span class="hl num">1L</span><span class="hl opt">;</span>
+        <span class="hl kwa">while</span> <span class="hl opt">( (</span> task <span class="hl opt">=</span> <span class="hl kwd">GetTaskId</span><span class="hl opt">() ) &lt;</span> _ntasks <span class="hl opt">) {</span>
+            var idxMin <span class="hl opt">=</span> task <span class="hl opt">*</span> _chunksz<span class="hl opt">;</span>
+            var idxMax <span class="hl opt">=</span> Math<span class="hl opt">.</span><span class="hl kwd">Min</span><span class="hl opt">(</span> _fact<span class="hl opt">[</span> _n <span class="hl opt">],</span> idxMin <span class="hl opt">+</span> _chunksz <span class="hl opt">);</span>
+            <span class="hl opt">{</span>
+                var idx <span class="hl opt">=</span> idxMin<span class="hl opt">;</span>
+                var pl <span class="hl opt">=</span> p<span class="hl opt">.</span>LongLength<span class="hl opt">;</span>
+                <span class="hl kwa">for</span> <span class="hl opt">(</span> var i <span class="hl opt">=</span> <span class="hl num">0L</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> pl<span class="hl opt">; ++</span>i <span class="hl opt">)</span> p<span class="hl opt">[</span> i <span class="hl opt">] =</span> i<span class="hl opt">;</span>
+
+                <span class="hl kwa">for</span> <span class="hl opt">(</span> var i <span class="hl opt">=</span> count<span class="hl opt">.</span>LongLength <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">&gt;</span> <span class="hl num">0L</span><span class="hl opt">; --</span>i <span class="hl opt">) {</span>
+                    var qfi <span class="hl opt">= *(</span> qf <span class="hl opt">+</span> i <span class="hl opt">);</span>
+                    var qpi1 <span class="hl opt">=</span> qp1 <span class="hl opt">+</span> i<span class="hl opt">;</span>
+                    var qpi <span class="hl opt">=</span> qp <span class="hl opt">+</span> i<span class="hl opt">;</span>
+                    var d <span class="hl opt">=</span> idx <span class="hl opt">/</span> qfi<span class="hl opt">;</span>
+                    <span class="hl opt">*(</span> qc <span class="hl opt">+</span> i <span class="hl opt">) =</span> d<span class="hl opt">;</span>
+                    idx <span class="hl opt">=</span> idx <span class="hl opt">%</span> qfi<span class="hl opt">;</span>
+                    <span class="hl slc">//Array.Copy( p, 0, pp, 0, i + 1 );</span>
+                    <span class="hl kwa">for</span> <span class="hl opt">(</span> <span class="hl kwb">long</span><span class="hl opt">*</span> qs <span class="hl opt">=</span> qp<span class="hl opt">,</span> qd <span class="hl opt">=</span> qpp<span class="hl opt">;</span> qs <span class="hl opt">&lt;</span> qpi1<span class="hl opt">; *</span>qd <span class="hl opt">= *</span>qs<span class="hl opt">,++</span>qs<span class="hl opt">,++</span>qd <span class="hl opt">) {}</span>
+
+                    <span class="hl kwb">long</span> jd <span class="hl opt">=</span> d<span class="hl opt">;</span>
+                    <span class="hl kwa">for</span> <span class="hl opt">(</span> var j <span class="hl opt">=</span> qp<span class="hl opt">;</span> j <span class="hl opt">&lt;=</span> qpi<span class="hl opt">; ++</span>j<span class="hl opt">, ++</span>jd <span class="hl opt">)</span>
+                        <span class="hl opt">*</span>j <span class="hl opt">=</span> jd <span class="hl opt">&lt;=</span> i ? <span class="hl opt">*(</span> qpp <span class="hl opt">+</span> jd <span class="hl opt">) : *(</span> ppm1 <span class="hl opt">+</span> jd <span class="hl opt">-</span> i <span class="hl opt">);</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+
+            var maxflips <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            var chksum <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span> var i <span class="hl opt">=</span> idxMin<span class="hl opt">;; ) {</span>
+                <span class="hl kwa">if</span> <span class="hl opt">( *</span>qp <span class="hl opt">!=</span> <span class="hl num">0</span> <span class="hl opt">) {</span>
+                    <span class="hl ppc">#region CountFlips();</span>
+                    var flips <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                    var first <span class="hl opt">= *</span>qp<span class="hl opt">;</span>
+                    <span class="hl kwa">if</span> <span class="hl opt">( *(</span> qp <span class="hl opt">+</span> first <span class="hl opt">) !=</span> <span class="hl num">0</span> <span class="hl opt">) {</span>
+                        <span class="hl slc">//Array.Copy( p, 0, pp, 0, pp.Length );</span>
+                        <span class="hl kwa">for</span> <span class="hl opt">(</span> <span class="hl kwb">long</span><span class="hl opt">*</span> s <span class="hl opt">=</span> qp<span class="hl opt">,</span> d <span class="hl opt">=</span> qpp<span class="hl opt">;</span> s <span class="hl opt">&lt;</span> qpe<span class="hl opt">; *</span>d <span class="hl opt">= *</span>s<span class="hl opt">, ++</span>s<span class="hl opt">, ++</span>d <span class="hl opt">) {}</span>
+                        <span class="hl kwa">do</span> <span class="hl opt">{</span>
+                            <span class="hl opt">++</span>flips<span class="hl opt">;</span>
+                            <span class="hl kwa">for</span> <span class="hl opt">(</span> <span class="hl kwb">long</span><span class="hl opt">*</span> lo <span class="hl opt">=</span> pp1<span class="hl opt">,</span> hi <span class="hl opt">=</span> ppm1 <span class="hl opt">+</span> first<span class="hl opt">;</span> lo <span class="hl opt">&lt;</span> hi<span class="hl opt">; ++</span>lo<span class="hl opt">, --</span>hi <span class="hl opt">) {</span>
+                                var t <span class="hl opt">= *</span>lo<span class="hl opt">; *</span>lo <span class="hl opt">= *</span>hi<span class="hl opt">; *</span>hi <span class="hl opt">=</span> t<span class="hl opt">;</span>
+                            <span class="hl opt">}</span>
+                            var qppfirst <span class="hl opt">=</span> qpp <span class="hl opt">+</span> first<span class="hl opt">;</span>
+                            var tp <span class="hl opt">= *</span>qppfirst<span class="hl opt">;</span>
+                            <span class="hl opt">*</span>qppfirst <span class="hl opt">=</span> first<span class="hl opt">;</span>
+                            first <span class="hl opt">=</span> tp<span class="hl opt">;</span>
+                        <span class="hl opt">}</span> <span class="hl kwa">while</span> <span class="hl opt">( *(</span> qpp <span class="hl opt">+</span> first <span class="hl opt">) !=</span> <span class="hl num">0</span> <span class="hl opt">);</span>
+                    <span class="hl opt">}</span>
+                    <span class="hl ppc">#endregion</span>
+                    <span class="hl kwa">if</span> <span class="hl opt">(</span> flips <span class="hl opt">&gt;</span> maxflips <span class="hl opt">)</span> maxflips <span class="hl opt">=</span> flips<span class="hl opt">;</span>
+                    chksum <span class="hl opt">+= (</span> i <span class="hl opt">&amp;</span> <span class="hl num">1</span> <span class="hl opt">) ==</span> <span class="hl num">0</span> ? flips <span class="hl opt">: -</span>flips<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+                <span class="hl kwa">if</span> <span class="hl opt">( ++</span>i <span class="hl opt">==</span> idxMax <span class="hl opt">)</span> <span class="hl kwa">break</span><span class="hl opt">;</span>
+                <span class="hl ppc">#region NextPermutation();</span>
+                <span class="hl opt">{</span>
+                    var first <span class="hl opt">= *</span>qp1<span class="hl opt">;</span>
+                    <span class="hl opt">*</span>qp1 <span class="hl opt">= *</span>qp<span class="hl opt">;</span>
+                    <span class="hl opt">*</span>qp <span class="hl opt">=</span> first<span class="hl opt">;</span>
+
+                    var i2 <span class="hl opt">=</span> <span class="hl num">1L</span><span class="hl opt">;</span>
+                    <span class="hl kwa">while</span> <span class="hl opt">( ++*(</span> qc <span class="hl opt">+</span> i2 <span class="hl opt">) &gt;</span> i2 <span class="hl opt">) {</span>
+                        <span class="hl opt">*(</span> qc <span class="hl opt">+ (</span> i2<span class="hl opt">++ ) ) =</span> <span class="hl num">0</span><span class="hl opt">;</span>
+                        var next <span class="hl opt">= *</span>qp <span class="hl opt">= *</span>qp1<span class="hl opt">;</span>
+                        var qpi2 <span class="hl opt">=</span> qp <span class="hl opt">+</span> i2<span class="hl opt">;</span>
+                        <span class="hl kwa">for</span> <span class="hl opt">(</span> var j <span class="hl opt">=</span> qp1<span class="hl opt">;</span> j <span class="hl opt">&lt;</span> qpi2<span class="hl opt">; ) {</span>
+                            var ji <span class="hl opt">=</span> j<span class="hl opt">;</span>
+                            <span class="hl opt">++</span>ji<span class="hl opt">;</span>
+                            <span class="hl opt">*</span>j <span class="hl opt">= *</span>ji<span class="hl opt">;</span>
+                            j <span class="hl opt">=</span> ji<span class="hl opt">;</span>
+                        <span class="hl opt">}</span>
+                        <span class="hl opt">*</span>qpi2 <span class="hl opt">=</span> first<span class="hl opt">;</span>
+                        first <span class="hl opt">=</span> next<span class="hl opt">;</span>
+                    <span class="hl opt">}</span>
+                <span class="hl opt">}</span>
+                <span class="hl ppc">#endregion</span>
+            <span class="hl opt">}</span>
+            _maxFlips<span class="hl opt">[</span> task <span class="hl opt">] =</span> maxflips<span class="hl opt">;</span>
+            _chkSums<span class="hl opt">[</span> task <span class="hl opt">] =</span> chksum<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">void</span> <span class="hl kwd">Main</span><span class="hl opt">(</span> String<span class="hl opt">[]</span> args <span class="hl opt">) {</span>
+        <span class="hl kwd">Main2</span><span class="hl opt">(</span> args <span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwa">private static</span> <span class="hl kwb">void</span> <span class="hl kwd">Main2</span><span class="hl opt">(</span> params <span class="hl kwb">string</span><span class="hl opt">[]</span> args <span class="hl opt">) {</span>
+        _n <span class="hl opt">=</span> <span class="hl num">7</span><span class="hl opt">;</span>
+        <span class="hl kwa">if</span> <span class="hl opt">(</span> args<span class="hl opt">.</span>Length <span class="hl opt">&gt;</span> <span class="hl num">0</span> <span class="hl opt">)</span> _n <span class="hl opt">=</span> Int32<span class="hl opt">.</span><span class="hl kwd">Parse</span><span class="hl opt">(</span> args<span class="hl opt">[</span> <span class="hl num">0</span> <span class="hl opt">] );</span>
+
+        _fact <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">int</span><span class="hl opt">[</span>_n <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">];</span>
+        _fact<span class="hl opt">[</span> <span class="hl num">0</span> <span class="hl opt">] =</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span> var i <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> _fact<span class="hl opt">.</span>Length<span class="hl opt">; ++</span>i <span class="hl opt">)</span> _fact<span class="hl opt">[</span> i <span class="hl opt">] =</span> _fact<span class="hl opt">[</span> i <span class="hl opt">-</span> <span class="hl num">1</span> <span class="hl opt">] *</span> i<span class="hl opt">;</span>
+
+        _chunksz <span class="hl opt">= (</span> _fact<span class="hl opt">[</span> _n <span class="hl opt">] +</span> Nchunks <span class="hl opt">-</span> <span class="hl num">1</span> <span class="hl opt">) /</span> Nchunks<span class="hl opt">;</span>
+        _ntasks <span class="hl opt">= (</span> _fact<span class="hl opt">[</span> _n <span class="hl opt">] +</span> _chunksz <span class="hl opt">-</span> <span class="hl num">1</span> <span class="hl opt">) /</span> _chunksz<span class="hl opt">;</span>
+        _maxFlips <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">int</span><span class="hl opt">[</span>_ntasks<span class="hl opt">];</span>
+        _chkSums <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">int</span><span class="hl opt">[</span>_ntasks<span class="hl opt">];</span>
+        _taskId <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+        var nthreads <span class="hl opt">=</span> Environment<span class="hl opt">.</span>ProcessorCount<span class="hl opt">;</span>
+        var threads <span class="hl opt">=</span> <span class="hl kwa">new</span> Thread<span class="hl opt">[</span>nthreads<span class="hl opt">];</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>var i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> nthreads<span class="hl opt">; ++</span>i<span class="hl opt">) (</span>threads<span class="hl opt">[</span>i<span class="hl opt">] =</span> <span class="hl kwa">new</span> <span class="hl kwd">Thread</span><span class="hl opt">(</span>Run<span class="hl opt">)).</span><span class="hl kwd">Start</span><span class="hl opt">();</span>
+        <span class="hl kwa">foreach</span> <span class="hl opt">(</span>var t <span class="hl kwa">in</span> threads<span class="hl opt">)</span> t<span class="hl opt">.</span><span class="hl kwd">Join</span><span class="hl opt">();</span>
+        var res <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        <span class="hl kwa">foreach</span> <span class="hl opt">(</span> var v <span class="hl kwa">in</span> _maxFlips <span class="hl opt">)</span> res <span class="hl opt">=</span> Math<span class="hl opt">.</span><span class="hl kwd">Max</span><span class="hl opt">(</span> res<span class="hl opt">,</span> v <span class="hl opt">);</span>
+        var chk <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        <span class="hl kwa">foreach</span> <span class="hl opt">(</span> var v <span class="hl kwa">in</span> _chkSums <span class="hl opt">)</span> chk <span class="hl opt">+=</span> v<span class="hl opt">;</span>
+        Console<span class="hl opt">.</span><span class="hl kwd">WriteLine</span><span class="hl opt">(</span> <span class="hl str">&quot;{0}</span><span class="hl esc">\n</span><span class="hl str">Pfannkuchen({1}) = {2}&quot;</span><span class="hl opt">,</span> chk<span class="hl opt">,</span> _n<span class="hl opt">,</span> res <span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>

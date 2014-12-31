@@ -1,0 +1,324 @@
+<span class="hl com">/* The Computer Language Benchmarks Game</span>
+<span class="hl com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl com"> *</span>
+<span class="hl com"> * contributed by Daryl Griffith </span>
+<span class="hl com"> */</span>
+
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>io<span class="hl opt">.</span>Closeable<span class="hl opt">;</span>
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>io<span class="hl opt">.</span>IOException<span class="hl opt">;</span>
+<span class="hl kwa">import</span> java<span class="hl opt">.</span>io<span class="hl opt">.</span>InputStream<span class="hl opt">;</span>
+
+<span class="hl kwa">public class</span> knucleotide <span class="hl opt">{</span>
+
+    <span class="hl kwa">static final</span> HashTable MAP <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">HashTable</span><span class="hl opt">();</span>
+    <span class="hl kwa">static final</span> <span class="hl kwb">int</span><span class="hl opt">[]</span> SEQUENCES1 <span class="hl opt">= {</span><span class="hl num">1</span><span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">};</span>
+    <span class="hl kwa">static final</span> <span class="hl kwb">int</span><span class="hl opt">[]</span> SEQUENCES2 <span class="hl opt">= {</span><span class="hl num">3</span><span class="hl opt">,</span> <span class="hl num">4</span><span class="hl opt">,</span> <span class="hl num">6</span><span class="hl opt">,</span> <span class="hl num">12</span><span class="hl opt">,</span> <span class="hl num">18</span><span class="hl opt">};</span>
+    <span class="hl kwa">static final</span> <span class="hl kwb">int</span> LINE_LENGTH <span class="hl opt">=</span> <span class="hl num">60</span><span class="hl opt">;</span>
+    <span class="hl kwa">static final</span> <span class="hl kwb">int</span> EOF <span class="hl opt">= -</span><span class="hl num">1</span><span class="hl opt">;</span>
+    <span class="hl kwa">static</span> <span class="hl kwb">byte</span><span class="hl opt">[]</span> nucleotides<span class="hl opt">;</span>
+
+    <span class="hl kwa">public static</span> <span class="hl kwb">void</span> <span class="hl kwd">main</span><span class="hl opt">(</span>String<span class="hl opt">[]</span> args<span class="hl opt">) {</span>
+        <span class="hl kwa">try</span> <span class="hl opt">(</span>LineInputStream <span class="hl kwa">in</span> <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">LineInputStream</span><span class="hl opt">(</span>System<span class="hl opt">.</span><span class="hl kwa">in</span><span class="hl opt">)) {</span>
+            <span class="hl kwa">final</span> <span class="hl kwb">byte</span><span class="hl opt">[]</span> temp <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">byte</span><span class="hl opt">[</span>LINE_LENGTH<span class="hl opt">];</span>
+            <span class="hl kwa">final</span> <span class="hl kwb">byte</span><span class="hl opt">[]</span> buffer <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">byte</span><span class="hl opt">[</span><span class="hl num">125</span>_000_000<span class="hl opt">];</span>
+            <span class="hl kwa">final</span> <span class="hl kwb">byte</span><span class="hl opt">[]</span> species <span class="hl opt">=</span> <span class="hl str">&quot;&gt;TH&quot;</span><span class="hl opt">.</span><span class="hl kwd">getBytes</span><span class="hl opt">();</span>
+            <span class="hl kwb">int</span> n<span class="hl opt">;</span>
+            <span class="hl kwb">int</span> i<span class="hl opt">;</span>
+
+            outer<span class="hl opt">:</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(;;) {</span>
+                n <span class="hl opt">=</span> <span class="hl kwa">in</span><span class="hl opt">.</span><span class="hl kwd">readLine</span><span class="hl opt">(</span>temp<span class="hl opt">);</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>n <span class="hl opt">==</span> EOF<span class="hl opt">) {</span>
+                    <span class="hl kwa">return</span><span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>n <span class="hl opt">!=</span> LINE_LENGTH<span class="hl opt">) {</span>
+                    <span class="hl kwa">for</span> <span class="hl opt">(</span>i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> i <span class="hl opt">&lt;</span> species<span class="hl opt">.</span>length<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+                        <span class="hl kwa">if</span> <span class="hl opt">(</span>temp<span class="hl opt">[</span>i<span class="hl opt">] !=</span> species<span class="hl opt">[</span>i<span class="hl opt">]) {</span>
+                            <span class="hl kwa">continue</span> outer<span class="hl opt">;</span>
+                        <span class="hl opt">}</span>
+                    <span class="hl opt">}</span>
+                    <span class="hl kwa">break</span><span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+            i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(;;) {</span>
+                n <span class="hl opt">=</span> <span class="hl kwa">in</span><span class="hl opt">.</span><span class="hl kwd">readLine</span><span class="hl opt">(</span>temp<span class="hl opt">);</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>n <span class="hl opt">==</span> EOF<span class="hl opt">) {</span>
+                    <span class="hl kwa">break</span><span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+                <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> j <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> j <span class="hl opt">&lt;</span> n<span class="hl opt">;</span> i<span class="hl opt">++,</span> j<span class="hl opt">++) {</span>
+                    buffer<span class="hl opt">[</span>i<span class="hl opt">] =</span> <span class="hl kwd">translate</span><span class="hl opt">(</span>temp<span class="hl opt">[</span>j<span class="hl opt">]);</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>i <span class="hl opt">==</span> buffer<span class="hl opt">.</span>length<span class="hl opt">) {</span>
+                nucleotides <span class="hl opt">=</span> buffer<span class="hl opt">;</span>
+            <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+                nucleotides <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">byte</span><span class="hl opt">[</span>i<span class="hl opt">];</span>
+                System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buffer<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> nucleotides<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> i<span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span> <span class="hl kwa">catch</span> <span class="hl opt">(</span>IOException e<span class="hl opt">) {</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwd">countSequences</span><span class="hl opt">(</span>SEQUENCES1<span class="hl opt">);</span>
+        <span class="hl kwd">printSequence</span><span class="hl opt">(</span><span class="hl num">4</span><span class="hl opt">,</span> <span class="hl num">8</span><span class="hl opt">);</span>
+        <span class="hl kwd">printSequence</span><span class="hl opt">(</span><span class="hl num">16</span><span class="hl opt">,</span> <span class="hl num">32</span><span class="hl opt">);</span>
+        <span class="hl kwd">countSequences</span><span class="hl opt">(</span>SEQUENCES2<span class="hl opt">);</span>
+        <span class="hl opt">{</span>
+            <span class="hl kwa">final</span> String<span class="hl opt">[]</span> SPICIFIC_SEQUENCES <span class="hl opt">=</span> <span class="hl kwa">new</span> String<span class="hl opt">[] {</span><span class="hl str">&quot;GGT&quot;</span>
+                    <span class="hl opt">,</span> <span class="hl str">&quot;GGTA&quot;</span>
+                    <span class="hl opt">,</span> <span class="hl str">&quot;GGTATT&quot;</span>
+                    <span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATT&quot;</span>
+                    <span class="hl opt">,</span> <span class="hl str">&quot;GGTATTTTAATTTATAGT&quot;</span><span class="hl opt">};</span>
+            <span class="hl kwa">final</span> Entry key <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">Entry</span><span class="hl opt">();</span>
+
+            <span class="hl kwa">for</span> <span class="hl opt">(</span>String sequence <span class="hl opt">:</span> SPICIFIC_SEQUENCES<span class="hl opt">) {</span>
+                key<span class="hl opt">.</span><span class="hl kwd">setKey</span><span class="hl opt">(</span>sequence<span class="hl opt">);</span>
+                System<span class="hl opt">.</span>out<span class="hl opt">.</span><span class="hl kwd">print</span><span class="hl opt">(</span>MAP<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>key<span class="hl opt">).</span>count<span class="hl opt">);</span>
+                System<span class="hl opt">.</span>out<span class="hl opt">.</span><span class="hl kwd">print</span><span class="hl opt">(</span><span class="hl str">'</span><span class="hl esc">\t</span><span class="hl str">'</span><span class="hl opt">);</span>
+                System<span class="hl opt">.</span>out<span class="hl opt">.</span><span class="hl kwd">println</span><span class="hl opt">(</span>sequence<span class="hl opt">);</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static</span> <span class="hl kwb">byte</span> <span class="hl kwd">translate</span><span class="hl opt">(</span><span class="hl kwb">byte</span> b<span class="hl opt">) {</span>
+        <span class="hl kwa">return</span> <span class="hl opt">(</span><span class="hl kwb">byte</span><span class="hl opt">) ((</span>b <span class="hl opt">&gt;&gt;</span> <span class="hl num">1</span><span class="hl opt">) &amp;</span> <span class="hl num">3</span><span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static</span> <span class="hl kwb">void</span> <span class="hl kwd">countSequences</span><span class="hl opt">(</span><span class="hl kwb">int</span><span class="hl opt">[]</span> sequences<span class="hl opt">) {</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> sequence <span class="hl opt">:</span> sequences<span class="hl opt">) {</span>
+            <span class="hl kwd">updateHashtable</span><span class="hl opt">(</span>sequence<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static</span> <span class="hl kwb">void</span> <span class="hl kwd">updateHashtable</span><span class="hl opt">(</span><span class="hl kwb">int</span> sequence<span class="hl opt">) {</span>
+        Entry key <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">Entry</span><span class="hl opt">();</span>
+        Entry value<span class="hl opt">;</span>
+        <span class="hl kwa">final</span> <span class="hl kwb">long</span> sentinal <span class="hl opt">=</span> <span class="hl num">1L</span> <span class="hl opt">&lt;&lt; (</span>sequence <span class="hl opt">&lt;&lt;</span> <span class="hl num">1</span><span class="hl opt">);</span>
+        <span class="hl kwa">final</span> <span class="hl kwb">long</span> mask <span class="hl opt">=</span> sentinal <span class="hl opt">-</span> <span class="hl num">1L</span><span class="hl opt">;</span>
+
+        key<span class="hl opt">.</span><span class="hl kwd">setKey</span><span class="hl opt">(</span>nucleotides<span class="hl opt">.</span>length <span class="hl opt">-</span> sequence <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">);</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> nucleotides<span class="hl opt">.</span>length <span class="hl opt">-</span> sequence<span class="hl opt">;</span> i <span class="hl opt">&gt;=</span> <span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">--) {</span>
+            key<span class="hl opt">.</span><span class="hl kwd">shiftKey</span><span class="hl opt">(</span>i<span class="hl opt">,</span> mask<span class="hl opt">,</span> sentinal<span class="hl opt">);</span>
+            value <span class="hl opt">=</span> MAP<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>key<span class="hl opt">);</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>value <span class="hl opt">!=</span> null<span class="hl opt">) {</span>
+                value<span class="hl opt">.</span>count<span class="hl opt">++;</span>
+                <span class="hl kwa">continue</span><span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+            MAP<span class="hl opt">.</span><span class="hl kwd">put</span><span class="hl opt">(</span>key<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static</span> <span class="hl kwb">void</span> <span class="hl kwd">printSequence</span><span class="hl opt">(</span><span class="hl kwb">int</span> start<span class="hl opt">,</span> <span class="hl kwb">int</span> end<span class="hl opt">) {</span>
+        Entry<span class="hl opt">[]</span> sorted <span class="hl opt">=</span> <span class="hl kwa">new</span> Entry<span class="hl opt">[</span>end <span class="hl opt">-</span> start<span class="hl opt">];</span>
+        Entry key <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwd">Entry</span><span class="hl opt">();</span>
+        Entry value<span class="hl opt">;</span>
+        <span class="hl kwb">int</span> k <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        <span class="hl kwb">int</span> sum <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+        <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> start<span class="hl opt">;</span> i <span class="hl opt">&lt;</span> end<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+            key<span class="hl opt">.</span>key <span class="hl opt">=</span> i<span class="hl opt">;</span>
+            value <span class="hl opt">=</span> MAP<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>key<span class="hl opt">);</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>value <span class="hl opt">!=</span> null<span class="hl opt">) {</span>
+                sum <span class="hl opt">+=</span> value<span class="hl opt">.</span>count<span class="hl opt">;</span>
+                sorted<span class="hl opt">[</span>k<span class="hl opt">++] =</span> value<span class="hl opt">;</span>
+                <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">++ ;</span> i <span class="hl opt">&lt;</span> end<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+                    key<span class="hl opt">.</span>key <span class="hl opt">=</span> i<span class="hl opt">;</span>
+                    value <span class="hl opt">=</span> MAP<span class="hl opt">.</span><span class="hl kwd">get</span><span class="hl opt">(</span>key<span class="hl opt">);</span>
+                    <span class="hl kwa">if</span> <span class="hl opt">(</span>value <span class="hl opt">!=</span> null<span class="hl opt">) {</span>
+                        <span class="hl kwb">int</span> j<span class="hl opt">;</span>
+
+                        sum <span class="hl opt">+=</span> value<span class="hl opt">.</span>count<span class="hl opt">;</span>
+                        <span class="hl kwa">for</span> <span class="hl opt">(</span>j <span class="hl opt">=</span> k<span class="hl opt">++;</span> j <span class="hl opt">&gt;</span> <span class="hl num">0</span> <span class="hl opt">&amp;&amp;</span> value<span class="hl opt">.</span><span class="hl kwd">lessthan</span><span class="hl opt">(</span>sorted<span class="hl opt">[</span>j <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">]);</span> j<span class="hl opt">--) {</span>
+                            sorted<span class="hl opt">[</span>j<span class="hl opt">] =</span> sorted<span class="hl opt">[</span>j <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">];</span>
+                        <span class="hl opt">}</span>
+                        sorted<span class="hl opt">[</span>j<span class="hl opt">] =</span> value<span class="hl opt">;</span>
+                    <span class="hl opt">}</span>
+                <span class="hl opt">}</span>
+                <span class="hl kwa">break</span><span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> j <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> j <span class="hl opt">&lt;</span> k<span class="hl opt">;</span> j<span class="hl opt">++) {</span>
+            value <span class="hl opt">=</span> sorted<span class="hl opt">[</span>j<span class="hl opt">];</span>
+            System<span class="hl opt">.</span>out<span class="hl opt">.</span><span class="hl kwd">format</span><span class="hl opt">(</span><span class="hl str">&quot;%s %.3f</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">,</span> value<span class="hl opt">,</span> value<span class="hl opt">.</span>count <span class="hl opt">*</span> <span class="hl num">100</span>f <span class="hl opt">/</span> sum<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+        System<span class="hl opt">.</span>out<span class="hl opt">.</span><span class="hl kwd">println</span><span class="hl opt">();</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static class</span> LineInputStream <span class="hl kwa">implements</span> Closeable <span class="hl opt">{</span>
+
+        <span class="hl kwa">static final</span> <span class="hl kwb">int</span> LF <span class="hl opt">=</span> <span class="hl num">10</span><span class="hl opt">;</span>
+        <span class="hl kwa">final</span> <span class="hl kwb">byte</span><span class="hl opt">[]</span> buf <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">byte</span><span class="hl opt">[</span><span class="hl num">8192</span><span class="hl opt">];</span>
+        <span class="hl kwa">final</span> InputStream <span class="hl kwa">in</span><span class="hl opt">;</span>
+        <span class="hl kwb">int</span> pos <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+        <span class="hl kwb">int</span> end <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+        <span class="hl kwa">public</span> <span class="hl kwd">LineInputStream</span><span class="hl opt">(</span>InputStream <span class="hl kwa">in</span><span class="hl opt">) {</span>
+            <span class="hl kwa">this</span><span class="hl opt">.</span><span class="hl kwa">in</span> <span class="hl opt">=</span> <span class="hl kwa">in</span><span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwc">&#64;Override</span>
+        <span class="hl kwa">public</span> <span class="hl kwb">void</span> <span class="hl kwd">close</span><span class="hl opt">()</span> <span class="hl kwa">throws</span> IOException <span class="hl opt">{</span>
+            <span class="hl kwa">in</span><span class="hl opt">.</span><span class="hl kwd">close</span><span class="hl opt">();</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwa">public</span> <span class="hl kwb">int</span> <span class="hl kwd">readLine</span><span class="hl opt">(</span><span class="hl kwb">byte</span><span class="hl opt">[]</span> b<span class="hl opt">)</span> <span class="hl kwa">throws</span> IOException <span class="hl opt">{</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> pos<span class="hl opt">;</span> i <span class="hl opt">&lt;</span> end<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>buf<span class="hl opt">[</span>i<span class="hl opt">] ==</span> LF<span class="hl opt">) {</span>
+                    <span class="hl kwa">if</span> <span class="hl opt">(</span>i <span class="hl opt">-</span> pos <span class="hl opt">==</span> LINE_LENGTH<span class="hl opt">) {</span>
+                        System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> LINE_LENGTH<span class="hl opt">);</span>
+                        pos <span class="hl opt">+=</span> LINE_LENGTH <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                        <span class="hl kwa">return</span> LINE_LENGTH<span class="hl opt">;</span>
+                    <span class="hl opt">}</span>
+                    <span class="hl kwb">int</span> size <span class="hl opt">=</span> i <span class="hl opt">-</span> pos<span class="hl opt">;</span>
+
+                    System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> size<span class="hl opt">);</span>
+                    pos <span class="hl opt">+=</span> size <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                    <span class="hl kwa">return</span> size<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+            end <span class="hl opt">=</span> end <span class="hl opt">-</span> pos<span class="hl opt">;</span>
+            System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> buf<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> end<span class="hl opt">);</span>
+            pos <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+            <span class="hl kwb">int</span> n <span class="hl opt">=</span> <span class="hl kwa">in</span><span class="hl opt">.</span><span class="hl kwd">read</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> end<span class="hl opt">,</span> buf<span class="hl opt">.</span>length <span class="hl opt">-</span> end<span class="hl opt">);</span>
+
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>n <span class="hl opt">==</span> EOF<span class="hl opt">) {</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>end <span class="hl opt">&gt;</span> <span class="hl num">0</span><span class="hl opt">) {</span>
+                    System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> end<span class="hl opt">);</span>
+                    pos <span class="hl opt">=</span> end<span class="hl opt">;</span>
+                    <span class="hl kwa">return</span> end<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+                <span class="hl kwa">return</span> EOF<span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+            end <span class="hl opt">+=</span> n<span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> pos<span class="hl opt">;</span> i <span class="hl opt">&lt;</span> end<span class="hl opt">;</span> i<span class="hl opt">++) {</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>buf<span class="hl opt">[</span>i<span class="hl opt">] ==</span> LF<span class="hl opt">) {</span>
+                    <span class="hl kwa">if</span> <span class="hl opt">(</span>i <span class="hl opt">-</span> pos <span class="hl opt">==</span> LINE_LENGTH<span class="hl opt">) {</span>
+                        System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> LINE_LENGTH<span class="hl opt">);</span>
+                        pos <span class="hl opt">+=</span> LINE_LENGTH <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                        <span class="hl kwa">return</span> LINE_LENGTH<span class="hl opt">;</span>
+                    <span class="hl opt">}</span>
+                    <span class="hl kwb">int</span> size <span class="hl opt">=</span> i <span class="hl opt">-</span> pos<span class="hl opt">;</span>
+
+                    System<span class="hl opt">.</span><span class="hl kwd">arraycopy</span><span class="hl opt">(</span>buf<span class="hl opt">,</span> pos<span class="hl opt">,</span> b<span class="hl opt">,</span> <span class="hl num">0</span><span class="hl opt">,</span> size<span class="hl opt">);</span>
+                    pos <span class="hl opt">+=</span> size <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+                    <span class="hl kwa">return</span> size<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">return</span> EOF<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static class</span> Entry <span class="hl kwa">implements</span> Cloneable <span class="hl opt">{</span>
+
+        <span class="hl kwb">long</span> key<span class="hl opt">;</span>
+        <span class="hl kwb">int</span> count <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        Entry next<span class="hl opt">;</span>
+
+        <span class="hl kwc">&#64;Override</span>
+        <span class="hl kwa">protected</span> Entry <span class="hl kwd">clone</span><span class="hl opt">()</span> <span class="hl kwa">throws</span> CloneNotSupportedException <span class="hl opt">{</span>
+            <span class="hl kwa">return</span> <span class="hl opt">(</span>Entry<span class="hl opt">)</span> <span class="hl kwa">super</span><span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">int</span> <span class="hl kwd">hash</span><span class="hl opt">() {</span>
+            <span class="hl kwa">return</span> <span class="hl opt">(</span><span class="hl kwb">int</span><span class="hl opt">) (</span>key ^ <span class="hl opt">(</span>key <span class="hl opt">&gt;&gt;&gt;</span> <span class="hl num">18</span><span class="hl opt">));</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">boolean</span> <span class="hl kwd">lessthan</span><span class="hl opt">(</span>Entry entry<span class="hl opt">) {</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>count <span class="hl opt">!=</span> entry<span class="hl opt">.</span>count<span class="hl opt">) {</span>
+                <span class="hl kwa">return</span> count <span class="hl opt">&gt;</span> entry<span class="hl opt">.</span>count<span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">return</span> key <span class="hl opt">&gt;</span> entry<span class="hl opt">.</span>key<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">setKey</span><span class="hl opt">(</span><span class="hl kwb">int</span> index<span class="hl opt">) {</span>
+            key <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> nucleotides<span class="hl opt">.</span>length <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">&gt;=</span> index<span class="hl opt">;</span> i<span class="hl opt">--) {</span>
+                key <span class="hl opt">= (</span>key <span class="hl opt">&lt;&lt;</span> <span class="hl num">2</span><span class="hl opt">) |</span> nucleotides<span class="hl opt">[</span>i<span class="hl opt">];</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">setKey</span><span class="hl opt">(</span>String species<span class="hl opt">) {</span>
+            key <span class="hl opt">=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> species<span class="hl opt">.</span><span class="hl kwd">length</span><span class="hl opt">() -</span> <span class="hl num">1</span><span class="hl opt">;</span> i <span class="hl opt">&gt;=</span> <span class="hl num">0</span><span class="hl opt">;</span> i<span class="hl opt">--) {</span>
+                key <span class="hl opt">= (</span>key <span class="hl opt">&lt;&lt;</span> <span class="hl num">2</span><span class="hl opt">) |</span> <span class="hl kwd">translate</span><span class="hl opt">((</span><span class="hl kwb">byte</span><span class="hl opt">)</span> species<span class="hl opt">.</span><span class="hl kwd">charAt</span><span class="hl opt">(</span>i<span class="hl opt">));</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">shiftKey</span><span class="hl opt">(</span><span class="hl kwb">int</span> index<span class="hl opt">,</span> <span class="hl kwb">long</span> mask<span class="hl opt">,</span> <span class="hl kwb">long</span> sentinal<span class="hl opt">) {</span>
+            key <span class="hl opt">= ((</span>key <span class="hl opt">&lt;&lt;</span> <span class="hl num">2</span><span class="hl opt">) &amp;</span> mask<span class="hl opt">) |</span> nucleotides<span class="hl opt">[</span>index<span class="hl opt">] |</span> sentinal<span class="hl opt">;</span>
+       <span class="hl opt">}</span>
+
+        <span class="hl kwc">&#64;Override</span>
+        <span class="hl kwa">public</span> String <span class="hl kwd">toString</span><span class="hl opt">() {</span>
+            <span class="hl kwa">final</span> <span class="hl kwb">char</span><span class="hl opt">[]</span> name 
+                    <span class="hl opt">=</span> <span class="hl kwa">new</span> <span class="hl kwb">char</span><span class="hl opt">[(</span><span class="hl num">63</span> <span class="hl opt">-</span> Long<span class="hl opt">.</span><span class="hl kwd">numberOfLeadingZeros</span><span class="hl opt">(</span>key<span class="hl opt">)) /</span> <span class="hl num">2</span><span class="hl opt">];</span>
+            <span class="hl kwb">long</span> temp <span class="hl opt">=</span> key<span class="hl opt">;</span>
+
+            <span class="hl kwa">for</span> <span class="hl opt">(</span><span class="hl kwb">int</span> i <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span> temp <span class="hl opt">&gt;</span> <span class="hl num">1</span><span class="hl opt">;</span> temp <span class="hl opt">&gt;&gt;=</span> <span class="hl num">2</span><span class="hl opt">,</span> i<span class="hl opt">++) {</span>
+                name<span class="hl opt">[</span>i<span class="hl opt">] = (</span><span class="hl kwb">char</span><span class="hl opt">) (((</span>temp <span class="hl opt">&amp;</span> <span class="hl num">3</span><span class="hl opt">) &lt;&lt;</span> <span class="hl num">1</span><span class="hl opt">) |</span> <span class="hl str">'A'</span><span class="hl opt">);</span>
+                <span class="hl kwa">if</span> <span class="hl opt">(</span>name<span class="hl opt">[</span>i<span class="hl opt">] ==</span> <span class="hl str">'E'</span><span class="hl opt">) {</span>
+                    name<span class="hl opt">[</span>i<span class="hl opt">] =</span> <span class="hl str">'T'</span><span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">return new</span> <span class="hl kwd">String</span><span class="hl opt">(</span>name<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwa">static class</span> HashTable <span class="hl opt">{</span>
+
+        <span class="hl kwa">static final</span> <span class="hl kwb">int</span> LOAD_FACTOR <span class="hl opt">=</span> <span class="hl num">0xc</span><span class="hl opt">;</span>
+        Entry<span class="hl opt">[]</span> table <span class="hl opt">=</span> <span class="hl kwa">new</span> Entry<span class="hl opt">[</span><span class="hl num">1</span> <span class="hl opt">&lt;&lt;</span> <span class="hl num">4</span><span class="hl opt">];</span>
+        <span class="hl kwb">int</span> mask <span class="hl opt">=</span> table<span class="hl opt">.</span>length <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        <span class="hl kwb">int</span> size <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">;</span>
+
+        Entry <span class="hl kwd">get</span><span class="hl opt">(</span>Entry key<span class="hl opt">) {</span>
+            Entry entry <span class="hl opt">=</span> table<span class="hl opt">[</span>key<span class="hl opt">.</span><span class="hl kwd">hash</span><span class="hl opt">() &amp;</span> mask<span class="hl opt">];</span>
+
+            <span class="hl kwa">while</span> <span class="hl opt">(</span>entry <span class="hl opt">!=</span> null <span class="hl opt">&amp;&amp;</span> entry<span class="hl opt">.</span>key <span class="hl opt">!=</span> key<span class="hl opt">.</span>key<span class="hl opt">) {</span>
+                entry <span class="hl opt">=</span> entry<span class="hl opt">.</span>next<span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">return</span> entry<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">put</span><span class="hl opt">(</span>Entry entry<span class="hl opt">) {</span>
+            <span class="hl kwa">if</span> <span class="hl opt">(((</span>size <span class="hl opt">&lt;&lt;</span> <span class="hl num">4</span><span class="hl opt">) /</span> table<span class="hl opt">.</span>length<span class="hl opt">) &gt;</span> LOAD_FACTOR<span class="hl opt">) {</span>
+                <span class="hl kwd">resize</span><span class="hl opt">();</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">try</span> <span class="hl opt">{</span>
+                <span class="hl kwd">putImpl</span><span class="hl opt">(</span>entry<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">());</span>
+            <span class="hl opt">}</span> <span class="hl kwa">catch</span> <span class="hl opt">(</span>CloneNotSupportedException ex<span class="hl opt">) {</span>
+            <span class="hl opt">}</span>
+            size<span class="hl opt">++;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">putImpl</span><span class="hl opt">(</span>Entry entry<span class="hl opt">) {</span>
+            Entry e <span class="hl opt">=</span> table<span class="hl opt">[</span>entry<span class="hl opt">.</span><span class="hl kwd">hash</span><span class="hl opt">() &amp;</span> mask<span class="hl opt">];</span>
+            Entry d<span class="hl opt">;</span>
+
+            <span class="hl kwa">if</span> <span class="hl opt">(</span>e <span class="hl opt">==</span> null<span class="hl opt">) {</span>
+                table<span class="hl opt">[</span>entry<span class="hl opt">.</span><span class="hl kwd">hash</span><span class="hl opt">() &amp;</span> mask<span class="hl opt">] =</span> entry<span class="hl opt">;</span>
+                <span class="hl kwa">return</span><span class="hl opt">;</span>
+            <span class="hl opt">}</span>
+            <span class="hl kwa">do</span> <span class="hl opt">{</span>
+                d <span class="hl opt">=</span> e<span class="hl opt">;</span>
+                e <span class="hl opt">=</span> e<span class="hl opt">.</span>next<span class="hl opt">;</span>
+            <span class="hl opt">}</span> <span class="hl kwa">while</span> <span class="hl opt">(</span>e <span class="hl opt">!=</span> null<span class="hl opt">);</span>
+            d<span class="hl opt">.</span>next <span class="hl opt">=</span> entry<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl kwb">void</span> <span class="hl kwd">resize</span><span class="hl opt">() {</span>
+            <span class="hl kwa">final</span> Entry<span class="hl opt">[]</span> oldTable <span class="hl opt">=</span> table<span class="hl opt">;</span>
+            Entry e<span class="hl opt">;</span>
+
+            table <span class="hl opt">=</span> <span class="hl kwa">new</span> Entry<span class="hl opt">[</span>table<span class="hl opt">.</span>length <span class="hl opt">&lt;&lt;</span> <span class="hl num">1</span><span class="hl opt">];</span>
+            mask <span class="hl opt">=</span> table<span class="hl opt">.</span>length <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">;</span>
+            <span class="hl kwa">for</span> <span class="hl opt">(</span>Entry entry <span class="hl opt">:</span> oldTable<span class="hl opt">) {</span>
+                <span class="hl kwa">while</span> <span class="hl opt">(</span>entry <span class="hl opt">!=</span> null<span class="hl opt">) {</span>
+                    e <span class="hl opt">=</span> entry<span class="hl opt">.</span>next<span class="hl opt">;</span>
+                    entry<span class="hl opt">.</span>next <span class="hl opt">=</span> null<span class="hl opt">;</span>
+                    <span class="hl kwd">putImpl</span><span class="hl opt">(</span>entry<span class="hl opt">);</span>
+                    entry <span class="hl opt">=</span> e<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
